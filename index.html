@@ -11,34 +11,24 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    html,body,#root{height:100%}
+    *{margin:0;padding:0;box-sizing:border-box}html,body,#root{height:100%}
     body{background:#F5F4F1;font-family:'DM Sans',system-ui,sans-serif;color:#1C1B18}
     input,select,button,textarea{font-family:'DM Sans',system-ui,sans-serif}
     ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#F5F4F1}::-webkit-scrollbar-thumb{background:#E0DDD6;border-radius:2px}
     input:focus,select:focus{outline:none;border-color:#9BB5C8!important;box-shadow:0 0 0 3px rgba(155,181,200,.15)}
-    button{cursor:pointer;transition:opacity .15s,transform .1s}
-    button:hover{opacity:.85}button:active{transform:scale(.98)}button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+    button{cursor:pointer;transition:opacity .15s,transform .1s}button:hover{opacity:.85}button:active{transform:scale(.98)}button:disabled{opacity:.4;cursor:not-allowed;transform:none}
     #splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#F5F4F1;z-index:9999;transition:opacity .4s}
     #splash.hide{opacity:0;pointer-events:none}
-    .pulse{animation:pulse 2s ease-in-out infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .pulse{animation:pulse 2s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   </style>
 </head>
 <body>
-<div id="splash">
-  <div style="font-size:40px;margin-bottom:16px">🏛️</div>
-  <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:13px;letter-spacing:2.5px;color:#1C1B18">SOFITEL RJ</div>
-  <div style="color:#B8B5AD;margin-top:8px;font-size:12px" class="pulse">Conectando...</div>
-</div>
+<div id="splash"><div style="font-size:40px;margin-bottom:16px">🏛️</div><div style="font-family:'Sora',sans-serif;font-weight:800;font-size:13px;letter-spacing:2.5px">SOFITEL RJ</div><div style="color:#B8B5AD;margin-top:8px;font-size:12px" class="pulse">Conectando...</div></div>
 <div id="root"></div>
 <script>
-const FIREBASE_CONFIG={apiKey:"AIzaSyAAO_16h-74TpZpMwszCwd5yO2cMmkcQNY",authDomain:"sofitel-954c1.firebaseapp.com",databaseURL:"https://sofitel-954c1-default-rtdb.firebaseio.com",projectId:"sofitel-954c1",storageBucket:"sofitel-954c1.firebasestorage.app",messagingSenderId:"882525727807",appId:"1:882525727807:web:210a7e6f2639b613f85c8a"};
-firebase.initializeApp(FIREBASE_CONFIG);
-const db=firebase.database();
-const REF=db.ref("sofitel_v4");
-const {useState,useEffect,useCallback,useMemo,useRef}=React;
-const ce=React.createElement;
+const FC={apiKey:"AIzaSyAAO_16h-74TpZpMwszCwd5yO2cMmkcQNY",authDomain:"sofitel-954c1.firebaseapp.com",databaseURL:"https://sofitel-954c1-default-rtdb.firebaseio.com",projectId:"sofitel-954c1",storageBucket:"sofitel-954c1.firebasestorage.app",messagingSenderId:"882525727807",appId:"1:882525727807:web:210a7e6f2639b613f85c8a"};
+firebase.initializeApp(FC);const db=firebase.database();const REF=db.ref("sofitel_v5");
+const {useState,useEffect,useCallback,useMemo,useRef}=React;const ce=React.createElement;
 
 const FLOORS=Array.from({length:16},(_,i)=>i+5);
 const DELAY_CAUSES=["Falta de material","Ausência de mão de obra","Impacto de outro fornecedor","Problema técnico / retrabalho","Acesso / logística"];
@@ -46,12 +36,11 @@ const fmt=d=>new Date(d).toISOString().split("T")[0];
 const addD=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 const diffD=(a,b)=>Math.floor((new Date(b)-new Date(a))/86400000);
 const TODAY=fmt(new Date());
+const SC=v=>v>=0?"#7AAE90":v>-15?"#C4A882":"#C48282";
+const SB=v=>v>=0?"#F0F7F3":v>-15?"#FAF6F0":"#FAF0F0";
+const SL=v=>v>=0?"No prazo":v>-15?"Atenção":"Atrasado";
 
-const STATUS_COLOR=v=>v>=0?"#7AAE90":v>-15?"#C4A882":"#C48282";
-const STATUS_BG=v=>v>=0?"#F0F7F3":v>-15?"#FAF6F0":"#FAF0F0";
-const STATUS_LABEL=v=>v>=0?"No prazo":v>-15?"Atenção":"Atrasado";
-
-const INIT_GROUPS=[
+const IG=[
   {id:"g1",name:"Pedras",color:"#9BB5C8",envName:"Ambiente"},
   {id:"g2",name:"Piso de Madeira",color:"#C4B89A",envName:"Ambiente"},
   {id:"g3",name:"Elétrica",color:"#C4C47A",envName:"Apartamento"},
@@ -61,34 +50,42 @@ const INIT_GROUPS=[
   {id:"g7",name:"Vidros",color:"#A8B8C4",envName:"Vão"},
   {id:"g8",name:"Marcenaria",color:"#C4B082",envName:"Ambiente"},
 ];
-const INIT_COMPANIES=[
-  {id:"c1",name:"Dimarmore",color:"#9BB5C8",teams:[{id:"t1",name:"Equipe A",people:3,daysPerUnit:3,assignedFloors:[5,6,7,8]}]},
-  {id:"c2",name:"Citrino",color:"#A8C4B0",teams:[{id:"t2",name:"Equipe A",people:2,daysPerUnit:4,assignedFloors:[9,10,11,12]}]},
-  {id:"c3",name:"Tramonto",color:"#C4B89A",teams:[{id:"t3",name:"Equipe A",people:4,daysPerUnit:3,assignedFloors:[13,14,15,16]}]},
-  {id:"c4",name:"Grannobre",color:"#C4A8B8",teams:[{id:"t4",name:"Equipe A",people:3,daysPerUnit:4,assignedFloors:[17,18,19,20]}]},
+const IC=[
+  {id:"c1",name:"Dimarmore",color:"#9BB5C8",teams:[{id:"t1",name:"Equipe A",people:3,dpu:3,assignedFloors:[5,6,7,8]}]},
+  {id:"c2",name:"Citrino",color:"#A8C4B0",teams:[{id:"t2",name:"Equipe A",people:2,dpu:4,assignedFloors:[9,10,11,12]}]},
+  {id:"c3",name:"Tramonto",color:"#C4B89A",teams:[{id:"t3",name:"Equipe A",people:4,dpu:3,assignedFloors:[13,14,15,16]}]},
+  {id:"c4",name:"Grannobre",color:"#C4A8B8",teams:[{id:"t4",name:"Equipe A",people:3,dpu:4,assignedFloors:[17,18,19,20]}]},
 ];
-const genSched=()=>{const s={},base=new Date();FLOORS.forEach((f,i)=>{s[f]={startDate:fmt(addD(base,i*7)),endDate:fmt(addD(base,i*7+90)),roomCount:12};});return s;};
+const gS=()=>{const s={},b=new Date();FLOORS.forEach((f,i)=>{s[f]={startDate:fmt(addD(b,i*7)),endDate:fmt(addD(b,i*7+90)),roomCount:12};});return s;};
 
 const S={
   card:{background:"#fff",borderRadius:12,padding:"16px 18px",border:"1px solid #EDEBE6"},
-  h2:{fontSize:13,fontWeight:700,margin:"0 0 14px",color:"#1C1B18"},
+  h2:{fontSize:13,fontWeight:700,margin:"0 0 12px",color:"#1C1B18"},
   h3:{fontSize:10,fontWeight:700,margin:"0 0 8px",color:"#B8B5AD",textTransform:"uppercase",letterSpacing:"1px"},
   lbl:{display:"block",fontSize:10,fontWeight:700,color:"#B8B5AD",marginBottom:4,textTransform:"uppercase",letterSpacing:".8px"},
   inp:{width:"100%",padding:"8px 11px",borderRadius:8,border:"1px solid #E8E5DF",fontSize:12,background:"#fff",color:"#1C1B18",boxSizing:"border-box"},
   btnP:{padding:"8px 16px",borderRadius:8,border:"none",fontSize:12,fontWeight:700,background:"#1C1B18",color:"#fff"},
   btnS:{padding:"8px 14px",borderRadius:8,border:"1px solid #E8E5DF",fontSize:12,fontWeight:600,background:"#fff",color:"#6C6960"},
   btnD:{padding:"5px 10px",borderRadius:7,border:"none",fontSize:11,fontWeight:700,background:"#FBF0F0",color:"#C48282"},
+  btnAdd:{padding:"6px 12px",borderRadius:8,border:"1px dashed #C4DDD0",fontSize:11,fontWeight:700,background:"#F0F7F3",color:"#7AAE90"},
   badge:c=>({display:"inline-flex",alignItems:"center",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700,background:c+"22",color:c}),
   g2:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12},
   g3:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10},
   g4:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10},
 };
 
-// ── Line Chart ──
-function LineChart({data,color,height}){
-  const h=height||220;
-  if(!data||data.length<2) return ce("div",{style:{height:h,display:"flex",alignItems:"center",justifyContent:"center",color:"#B8B5AD",fontSize:12}},"Registre avanços para ver o gráfico");
-  const W=720,H=h-30,pL=40,pR=20,pT=10,pB=24,cW=W-pL-pR,cH=H-pT-pB;
+// Back button component
+function BackBtn({label,onClick}){
+  return ce("button",{onClick,style:{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,border:"1px solid #EDEBE6",background:"#fff",fontSize:12,fontWeight:600,color:"#6C6960",marginBottom:16}},
+    "← ",label||"Voltar"
+  );
+}
+
+// ── Chart ──
+function LineChart({data,color,h}){
+  const H=h||240;
+  if(!data||data.length<2)return ce("div",{style:{height:H,display:"flex",alignItems:"center",justifyContent:"center",color:"#B8B5AD",fontSize:12}},"Registre avanços para ver o gráfico");
+  const W=900,CH=H-50,pL=42,pR=20,pT=10,pB=28,cW=W-pL-pR,cH=CH-pT-pB;
   const allV=data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
   const maxV=Math.max(...allV,1);
   const xp=i=>pL+(i/(data.length-1))*cW;
@@ -98,20 +95,20 @@ function LineChart({data,color,height}){
     if(pts.length<2)return null;
     return ce("path",{key,d:pts.map((p,j)=>`${j===0?"M":"L"} ${xp(p.i).toFixed(1)} ${yp(p.v).toFixed(1)}`).join(" "),stroke,strokeWidth:sw||2,fill:"none",strokeDasharray:dash||"none"});
   };
-  const step=Math.max(1,Math.floor(data.length/9));
+  const step=Math.max(1,Math.floor(data.length/10));
   const todayI=data.findLastIndex(d=>d.actual!==undefined);
   return ce("div",null,
-    ce("svg",{viewBox:`0 0 ${W} ${H+20}`,style:{width:"100%",height:h}},
-      [0,.25,.5,.75,1].map((p,i)=>ce("line",{key:i,x1:pL,x2:W-pR,y1:(pT+cH*(1-p)).toFixed(1),y2:(pT+cH*(1-p)).toFixed(1),stroke:"#F0EDE8",strokeWidth:1})),
+    ce("svg",{viewBox:`0 0 ${W} ${CH+24}`,style:{width:"100%",height:H-10},preserveAspectRatio:"xMidYMid meet"},
+      [0,.2,.4,.6,.8,1].map((p,i)=>ce("line",{key:i,x1:pL,x2:W-pR,y1:(pT+cH*(1-p)).toFixed(1),y2:(pT+cH*(1-p)).toFixed(1),stroke:"#F0EDE8",strokeWidth:1})),
       mkLine("planned","#D6D3CC","6,4",1.5),
-      mkLine("actual",color||"#9BB5C8",null,2.5),
-      mkLine("trend","#C4A882","4,3",2),
+      mkLine("actual",color||"#9BB5C8",null,3),
+      mkLine("trend","#C4A882","5,3",2),
       todayI>=0&&ce("line",{key:"td",x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#E8C4C4",strokeWidth:1.5,strokeDasharray:"4,3"}),
       todayI>=0&&ce("text",{key:"tdl",x:xp(todayI)+3,y:pT+10,fontSize:8,fill:"#C48282",fontFamily:"system-ui"},"Hoje"),
-      data.filter((_,i)=>i%step===0).map((d,i)=>ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:H+14,textAnchor:"middle",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},d.date)),
-      [0,Math.round(maxV/2),maxV].map((v,i)=>ce("text",{key:"y"+i,x:pL-3,y:yp(v)+3,textAnchor:"end",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},v+"%"))
+      data.filter((_,i)=>i%step===0).map((d,i)=>ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:CH+16,textAnchor:"middle",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},d.date)),
+      [0,Math.round(maxV/3),Math.round(maxV*2/3),maxV].map((v,i)=>ce("text",{key:"y"+i,x:pL-4,y:yp(v)+3,textAnchor:"end",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},v+"%"))
     ),
-    ce("div",{style:{display:"flex",gap:20,marginTop:6}},
+    ce("div",{style:{display:"flex",gap:20,marginTop:8}},
       [["#D6D3CC","Planejado"],[color||"#9BB5C8","Realizado"],["#C4A882","Tendência"]].map(([c,l])=>
         ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#8C8980"}},
           ce("div",{style:{width:22,height:2,background:c,borderRadius:1}}),l
@@ -121,654 +118,457 @@ function LineChart({data,color,height}){
   );
 }
 
-// ── Progress computation ──
-function computeProgress(updates,schedules,groupId){
-  const grpUpd=updates[groupId]||[],sched=schedules[groupId]||{};
-  // acc[floor][room][env] = %
+// ── Progress ──
+function computeProgress(updates,schedules,gid){
+  const grpUpd=updates[gid]||[],sched=schedules[gid]||{};
   const acc={};
-  grpUpd.forEach(u=>{
-    if(!acc[u.floor])acc[u.floor]={};
-    if(!acc[u.floor][u.room])acc[u.floor][u.room]={};
-    const env=u.environment||"Ambiente";
-    acc[u.floor][u.room][env]=(acc[u.floor][u.room][env]||0)+(u.actualPct||0);
-  });
-  const floorStats={};
+  grpUpd.forEach(u=>{if(!acc[u.floor])acc[u.floor]={};if(!acc[u.floor][u.room])acc[u.floor][u.room]={};const env=u.environment||"Ambiente";acc[u.floor][u.room][env]=(acc[u.floor][u.room][env]||0)+(u.actualPct||0);});
+  const fs={};
   FLOORS.forEach(fl=>{
     const sc=sched[fl]||{},rc=sc.roomCount||12;
-    let sumPct=0,doneRooms=0,totalEnvs=0;
-    const rooms={};
-    for(let r=1;r<=rc;r++){
-      const envs=acc[fl]?.[r]||{};
-      const envKeys=Object.keys(envs);
-      if(envKeys.length===0){rooms[r]={envs:{},avgPct:0,done:false};continue;}
-      let rSum=0;
-      const envData={};
-      envKeys.forEach(e=>{const p=Math.min(100,envs[e]);envData[e]=p;rSum+=p;totalEnvs++;});
-      const avgR=rSum/envKeys.length;
-      rooms[r]={envs:envData,avgPct:Math.round(avgR),done:avgR>=100};
-      sumPct+=avgR;
-      if(avgR>=100)doneRooms++;
-    }
-    const el=Math.max(0,diffD(sc.startDate||TODAY,TODAY));
-    const td=Math.max(1,diffD(sc.startDate||TODAY,sc.endDate||fmt(addD(new Date(),90))));
-    const plannedPct=Math.min(100,(el/td)*100);
-    const actualPct=rc>0?sumPct/rc:0;
-    floorStats[fl]={roomCount:rc,doneRooms,plannedPct,actualPct,variance:actualPct-plannedPct,rooms,startDate:sc.startDate,endDate:sc.endDate};
+    let sum=0,done=0;const rooms={};
+    for(let r=1;r<=rc;r++){const envs=acc[fl]?.[r]||{};const ek=Object.keys(envs);if(!ek.length){rooms[r]={envs:{},avgPct:0,done:false};continue;}let rs=0;const ed={};ek.forEach(e=>{const p=Math.min(100,envs[e]);ed[e]=p;rs+=p;});const avg=rs/ek.length;rooms[r]={envs:ed,avgPct:Math.round(avg),done:avg>=100};sum+=avg;if(avg>=100)done++;}
+    const el=Math.max(0,diffD(sc.startDate||TODAY,TODAY)),td=Math.max(1,diffD(sc.startDate||TODAY,sc.endDate||fmt(addD(new Date(),90))));
+    const pp=Math.min(100,(el/td)*100),ap=rc>0?sum/rc:0;
+    fs[fl]={roomCount:rc,doneRooms:done,plannedPct:pp,actualPct:ap,variance:ap-pp,rooms,startDate:sc.startDate,endDate:sc.endDate};
   });
-  const totals=FLOORS.reduce((a,f)=>{const s=floorStats[f];a.done+=s.doneRooms;a.total+=s.roomCount;a.sumPct+=s.actualPct;return a;},{done:0,total:0,sumPct:0});
-  return {acc,floorStats,totals};
+  const tot=FLOORS.reduce((a,f)=>{const s=fs[f];a.done+=s.doneRooms;a.total+=s.roomCount;a.sumPct+=s.actualPct;return a;},{done:0,total:0,sumPct:0});
+  return{acc,floorStats:fs,totals:tot};
 }
 
-// ── Chart data ──
-function computeChartData(updates,schedules,groupId,filterFloor){
-  const grpUpd=updates[groupId]||[],sched=schedules[groupId]||{};
-  const filtered=filterFloor?grpUpd.filter(u=>u.floor===filterFloor):grpUpd;
-  const dates=[...new Set(filtered.map(u=>u.date))].sort();
+function computeChart(updates,schedules,gid,filterFloor){
+  const grpUpd=(updates[gid]||[]).filter(u=>!filterFloor||u.floor===filterFloor);
+  const sched=schedules[gid]||{};
+  const dates=[...new Set(grpUpd.map(u=>u.date))].sort();
   const base=dates[0]||TODAY;
   const floors=filterFloor?[filterFloor]:FLOORS;
   const data=[];
   for(let i=0;i<=diffD(base,fmt(addD(new Date(),35)));i++){
     const date=fmt(addD(new Date(base),i)),isPast=date<=TODAY;
-    let planned=0;
-    floors.forEach(fl=>{const sc=sched[fl];if(!sc||date<sc.startDate)return;const el=Math.max(0,diffD(sc.startDate,date));const td=Math.max(1,diffD(sc.startDate,sc.endDate));planned+=(el/td)*100;});
+    let planned=0;floors.forEach(fl=>{const sc=sched[fl];if(!sc||date<sc.startDate)return;const el=Math.max(0,diffD(sc.startDate,date));const td=Math.max(1,diffD(sc.startDate,sc.endDate));planned+=(el/td)*100;});
     const avgP=floors.length>0?planned/floors.length:0;
     const entry={date:date.slice(5),planned:Math.round(avgP)};
-    if(isPast){
-      const acc={};
-      filtered.filter(u=>u.date<=date).forEach(u=>{const k=`${u.floor}_${u.room}_${u.environment||"A"}`;acc[k]=(acc[k]||0)+(u.actualPct||0);});
-      const vals=Object.values(acc).map(v=>Math.min(100,v));
-      entry.actual=vals.length>0?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;
-    }
-    if(!isPast&&dates.length>=2){
-      const lastActs=data.filter(d=>d.actual!==undefined);
-      if(lastActs.length>=2){const la=lastActs[lastActs.length-1].actual,rate=la/Math.max(1,diffD(dates[0],TODAY));entry.trend=Math.min(100,Math.round(la+rate*diffD(TODAY,date)));}
-    }
+    if(isPast){const acc={};grpUpd.filter(u=>u.date<=date).forEach(u=>{const k=`${u.floor}_${u.room}_${u.environment||"A"}`;acc[k]=(acc[k]||0)+(u.actualPct||0);});const vals=Object.values(acc).map(v=>Math.min(100,v));entry.actual=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;}
+    if(!isPast&&dates.length>=2){const la=data.filter(d=>d.actual!==undefined);if(la.length>=2){const v=la[la.length-1].actual,r=v/Math.max(1,diffD(dates[0],TODAY));entry.trend=Math.min(100,Math.round(v+r*diffD(TODAY,date)));}}
     data.push(entry);
   }
   return data;
 }
 
-// ── Get unit target ──
-function getUnitTarget(grpUpd,floor,room,env,daysPerUnit){
-  const base=Math.round(100/Math.max(1,daysPerUnit));
-  const unitUpd=grpUpd.filter(u=>u.floor===floor&&u.room===room&&(u.environment||"Ambiente")===env);
-  const totalP=unitUpd.reduce((s,u)=>s+(u.targetPct||0),0);
-  const totalA=unitUpd.reduce((s,u)=>s+(u.actualPct||0),0);
-  const accumulated=Math.min(100,totalA);
-  const remaining=100-accumulated;
-  if(remaining<=0)return{target:0,accumulated:100,remaining:0,carryover:0,done:true};
-  const carryover=Math.max(0,totalP-totalA);
-  return{target:Math.min(remaining,Math.round(base+carryover)),accumulated:Math.round(accumulated),remaining:Math.round(remaining),carryover:Math.round(carryover),done:false};
+function getUT(grpUpd,floor,room,env,dpu){
+  const base=Math.round(100/Math.max(1,dpu));
+  const ud=grpUpd.filter(u=>u.floor===floor&&u.room===room&&(u.environment||"Ambiente")===env);
+  const tp=ud.reduce((s,u)=>s+(u.targetPct||0),0),ta=ud.reduce((s,u)=>s+(u.actualPct||0),0);
+  const acc=Math.min(100,ta),rem=100-acc;
+  if(rem<=0)return{target:0,accumulated:100,remaining:0,carryover:0,done:true};
+  const co=Math.max(0,tp-ta);
+  return{target:Math.min(rem,Math.round(base+co)),accumulated:Math.round(acc),remaining:Math.round(rem),carryover:Math.round(co),done:false};
 }
 
-// ── Team schedule info for a floor ──
-function getFloorTeams(companies,floor){
-  return companies.flatMap(co=>co.teams.filter(t=>(t.assignedFloors||[]).includes(floor)).map(t=>({...t,coName:co.name,coColor:co.color})));
-}
-function calcFloorDailyCapacity(teams,roomCount){
-  // capacity = sum(1/daysPerUnit) environments per day
-  const cap=teams.reduce((s,t)=>s+(1/Math.max(1,t.daysPerUnit||4)),0);
-  const daysNeeded=roomCount/Math.max(0.001,cap);
-  return{cap:cap.toFixed(2),daysNeeded:Math.round(daysNeeded)};
-}
+function getFloorTeams(companies,floor){return companies.flatMap(co=>co.teams.filter(t=>(t.assignedFloors||[]).includes(floor)).map(t=>({...t,coName:co.name,coColor:co.color})));}
 
-// ══════════ FLOOR DETAIL ══════════
-function FloorDetail({floor,grp,grpUpd,sched,companies,onClose,groupColor}){
+// ══════════ GROUP DASHBOARD TAB ══════════
+function GroupDashboard({grp,updates,schedules,companies,setTab}){
+  const [selFloor,setSelFloor]=useState(null);
+  const progress=useMemo(()=>computeProgress(updates,schedules,grp.id),[updates,schedules,grp.id]);
+  const chartData=useMemo(()=>computeChart(updates,schedules,grp.id,null),[updates,schedules,grp.id]);
+  const {totals,floorStats}=progress;
+  const grpUpd=updates[grp.id]||[];
+  const avgPct=totals.total>0?Math.round(totals.sumPct/totals.total):0;
+  const daysA=grpUpd.length>0?Math.max(1,diffD(grpUpd[0]?.date||TODAY,TODAY)+1):1;
+  const dp=(grpUpd.reduce((s,u)=>s+(u.actualPct||0),0)/daysA).toFixed(1);
+  const atRisk=FLOORS.filter(f=>floorStats[f]?.variance<-10).length;
+
+  // Floor detail data
   const [selRoom,setSelRoom]=useState(null);
-  const [filterTeam,setFilterTeam]=useState("");
-  const sc=sched[floor]||{};
+  const floorChartData=useMemo(()=>selFloor?computeChart(updates,schedules,grp.id,selFloor):[],[updates,schedules,grp.id,selFloor]);
+  const floorTeams=selFloor?getFloorTeams(companies,selFloor):[];
+  const sc=selFloor?(schedules[grp.id]||{})[selFloor]||{}:{};
   const rc=sc.roomCount||12;
-  const teams=getFloorTeams(companies,floor);
-  const cap=calcFloorDailyCapacity(teams,rc);
-  const chartData=useMemo(()=>computeChartData({[grp?.id]:grpUpd},{[grp?.id]:sched},grp?.id,floor),[grpUpd,sched,floor]);
+  const acc=selFloor?(progress.acc[selFloor]||{}):{};
+  const rooms=selFloor?Array.from({length:rc},(_,i)=>i+1).map(r=>{const envs=acc[r]||{};const ek=Object.keys(envs);if(!ek.length)return{r,envs:{},avgPct:0};let s=0;const ed={};ek.forEach(e=>{const p=Math.min(100,envs[e]);ed[e]=p;s+=p;});return{r,envs:ed,avgPct:Math.round(s/ek.length)};}).slice(0,rc):[];
 
-  // Compute room progress
-  const acc={};
-  grpUpd.forEach(u=>{
-    if(u.floor!==floor)return;
-    if(filterTeam&&u.teamId!==filterTeam)return;
-    if(!acc[u.room])acc[u.room]={};
-    const env=u.environment||"Ambiente";
-    acc[u.room][env]=(acc[u.room][env]||0)+(u.actualPct||0);
-  });
-
-  const rooms=Array.from({length:rc},(_,i)=>i+1).map(r=>{
-    const envs=acc[r]||{};
-    const envKeys=Object.keys(envs);
-    if(envKeys.length===0)return{r,envs:{},avgPct:0,done:false};
-    const envData={};let sum=0;
-    envKeys.forEach(e=>{const p=Math.min(100,envs[e]);envData[e]=p;sum+=p;});
-    const avg=sum/envKeys.length;
-    return{r,envs:envData,avgPct:Math.round(avg),done:avg>=100};
-  });
-
-  const doneCount=rooms.filter(r=>r.done).length;
-  const allTeams=companies.flatMap(co=>co.teams.map(t=>({...t,coName:co.name,coColor:co.color})));
-
-  return ce("div",{style:{...S.card,marginTop:12,border:`2px solid ${groupColor||"#9BB5C8"}33`}},
-    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
-      ce("div",null,
-        ce("div",{style:{fontSize:15,fontWeight:700,color:"#1C1B18"}}),floor+"° Pavimento — Detalhe por Quarto",
-        ce("div",{style:{fontSize:11,color:"#B8B5AD",marginTop:2}},doneCount+" de "+rc+" quartos completos · "+teams.map(t=>t.coName+" "+t.name).join(", "))
-      ),
-      ce("div",{style:{display:"flex",gap:8,alignItems:"center"}},
-        ce("select",{style:{...S.inp,width:"auto",fontSize:11},value:filterTeam,onChange:e=>setFilterTeam(e.target.value)},
-          ce("option",{value:""},"Todas as equipes"),
-          allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" · "+t.name))
-        ),
-        ce("button",{style:{...S.btnS,padding:"6px 12px",fontSize:11},onClick:onClose},"✕ Fechar")
-      )
+  return ce("div",null,
+    // KPIs
+    ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}},
+      [{l:"Avanço Médio",v:avgPct+"%",s:"média dos ambientes",c:grp.color,bg:"#F0F4F8"},
+       {l:"Quartos Completos",v:totals.done+"/"+totals.total,s:"concluídos",c:"#7AAE90",bg:"#F0F7F3"},
+       {l:"Ritmo Diário",v:dp+"%",s:"avanço por dia",c:"#C4B89A",bg:"#FAF8F3"},
+       {l:"Andares em Risco",v:String(atRisk),s:"abaixo do plano",c:"#C4A882",bg:"#FAF6F0"},
+      ].map((k,i)=>ce("div",{key:i,style:{background:k.bg,borderRadius:11,padding:"13px 15px",borderTop:`3px solid ${k.c}`,border:`1px solid ${k.c}22`}},
+        ce("div",{style:{fontSize:9,color:"#B8B5AD",fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:5}},k.l),
+        ce("div",{style:{fontSize:24,fontWeight:700,color:k.c,lineHeight:1,marginBottom:3}},k.v),
+        ce("div",{style:{fontSize:10,color:"#B8B5AD"}},k.s)
+      ))
     ),
-    ce("div",{style:{...S.g2,marginBottom:14}},
-      ce("div",{style:{background:"#F5F4F1",borderRadius:9,padding:"12px 14px"}},
-        ce("div",{style:{fontSize:10,color:"#B8B5AD",marginBottom:2}},"Capacidade diária (todas equipes)"),
-        ce("div",{style:{fontSize:20,fontWeight:700,color:groupColor||"#9BB5C8"}},cap.cap+" ambientes/dia"),
-        ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"Estimativa: "+cap.daysNeeded+" dias para "+rc+" quartos")
+    // Chart — full width
+    ce("div",{style:{...S.card,marginBottom:14,padding:"16px 20px"}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        ce("p",{style:{...S.h2,margin:0}},"Cronograma Base · Avanço % e Tendência"),
+        ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 12px"},onClick:()=>setTab("update")},"+ Registrar avanço")
       ),
-      ce("div",{style:{background:"#F5F4F1",borderRadius:9,padding:"12px 14px"}},
-        ce("div",{style:{fontSize:10,color:"#B8B5AD",marginBottom:2}},"Cronograma"),
-        ce("div",{style:{fontSize:14,fontWeight:700,color:"#1C1B18"}},sc.startDate||"—"," → ",sc.endDate||"—"),
-        ce("div",{style:{fontSize:10,color:"#B8B5AD"}}),sc.roomCount||12," quartos · ",diffD(sc.startDate||TODAY,sc.endDate||TODAY)," dias"
-      )
+      ce(LineChart,{data:chartData,color:grp.color,h:260})
     ),
-    ce("div",{style:{marginBottom:14}},
-      ce("p",{style:{...S.h3,marginBottom:10}},"Quartos — Clique para ver detalhes"),
-      ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}},
-        rooms.map(rm=>{
-          const color=rm.done?"#7AAE90":rm.avgPct>0?"#9BB5C8":"#E8E5DF";
-          const bg=rm.done?"#F0F7F3":rm.avgPct>0?"#F0F4F8":"#FAFAF9";
-          const isSelected=selRoom===rm.r;
-          return ce("div",{key:rm.r,onClick:()=>setSelRoom(isSelected?null:rm.r),style:{padding:"8px 10px",borderRadius:8,background:bg,border:`1.5px solid ${isSelected?color:"#EDEBE6"}`,cursor:"pointer",textAlign:"center"}},
-            ce("div",{style:{fontWeight:700,fontSize:12,color:"#1C1B18"}},"Q"+rm.r),
-            ce("div",{style:{fontSize:10,color,fontWeight:700,marginTop:2}},rm.avgPct+"%"),
-            ce("div",{style:{background:"#E8E5DF",borderRadius:3,height:3,marginTop:4}},
-              ce("div",{style:{width:rm.avgPct+"%",background:color,height:3,borderRadius:3}})
-            )
+    // Floor grid
+    ce("div",{style:S.card},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        ce("p",{style:{...S.h2,margin:0}},"Pavimentos — Clique para ver detalhes"),
+        selFloor&&ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 10px"},onClick:()=>{setSelFloor(null);setSelRoom(null);}},"✕ Fechar detalhe")
+      ),
+      ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:selFloor?16:0}},
+        FLOORS.map(fl=>{
+          const s=floorStats[fl];const co=companies.find(c=>c.teams.some(t=>(t.assignedFloors||[]).includes(fl)));
+          const color=SC(s.variance);const isSel=selFloor===fl;
+          return ce("div",{key:fl,onClick:()=>{setSelFloor(isSel?null:fl);setSelRoom(null);},style:{borderRadius:10,padding:"10px 12px",background:isSel?"#fff":SB(s.variance),border:`${isSel?2:1}px solid ${isSel?color:color+"44"}`,cursor:"pointer"}},
+            ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
+              ce("span",{style:{fontWeight:700,fontSize:14,color:"#1C1B18"}},fl+"°"),
+              ce("span",{style:{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10,background:color+"22",color}},SL(s.variance))
+            ),
+            co&&ce("div",{style:{fontSize:9,color:"#B8B5AD",marginBottom:4}},co.name),
+            ce("div",{style:{background:"#E8E5DF",borderRadius:3,height:4,marginBottom:4}},ce("div",{style:{width:Math.min(100,s.actualPct)+"%",background:color,height:4,borderRadius:3}})),
+            ce("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:"#B8B5AD"}},ce("span",null,"Real "+s.actualPct.toFixed(0)+"%"),ce("span",null,"Plan "+s.plannedPct.toFixed(0)+"%")),
+            ce("div",{style:{fontSize:9,color:"#C4C1BA",marginTop:2}},s.doneRooms+"/"+s.roomCount+" completos")
           );
         })
-      )
-    ),
-    selRoom&&ce("div",{style:{background:"#F5F4F1",borderRadius:10,padding:14,marginBottom:14,border:"1px solid #EDEBE6"}},
-      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        ce("div",{style:{fontWeight:700,fontSize:13,color:"#1C1B18"}},"Quarto "+selRoom+" — Ambientes"),
-        ce("button",{style:{...S.btnS,fontSize:10,padding:"3px 8px"},onClick:()=>setSelRoom(null)},"✕")
       ),
-      Object.keys(acc[selRoom]||{}).length===0
-        ? ce("div",{style:{color:"#B8B5AD",fontSize:12}},"Nenhum registro para este quarto ainda.")
-        : ce("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-            Object.entries(acc[selRoom]||{}).map(([env,pct])=>{
-              const p=Math.min(100,Math.round(pct));
-              const color=p>=100?"#7AAE90":p>=50?"#9BB5C8":"#C4A882";
-              return ce("div",{key:env,style:{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:"#fff",borderRadius:8,border:"1px solid #EDEBE6"}},
-                ce("span",{style:{fontSize:12,fontWeight:600,color:"#1C1B18",flex:1}},env),
-                ce("div",{style:{flex:2,background:"#E8E5DF",borderRadius:4,height:6}},
-                  ce("div",{style:{width:p+"%",background:color,height:6,borderRadius:4}})
-                ),
-                ce("span",{style:{fontSize:12,fontWeight:700,color,minWidth:36,textAlign:"right"}},p+"%"),
-                p>=100&&ce("span",{style:S.badge("#7AAE90")},"✓")
+      selFloor&&ce("div",{style:{borderTop:"1px solid #EDEBE6",paddingTop:16}},
+        ce("div",{style:{...S.g2,marginBottom:14}},
+          ce("div",{style:{background:"#F5F4F1",borderRadius:9,padding:"12px 14px"}},
+            ce("div",{style:{fontSize:10,color:"#B8B5AD",marginBottom:2}},"Equipes no "+selFloor+"° andar"),
+            floorTeams.length?floorTeams.map(t=>ce("div",{key:t.id,style:{fontSize:12,fontWeight:600,color:"#1C1B18",marginBottom:3,display:"flex",gap:8,alignItems:"center"}},
+              ce("div",{style:{width:8,height:8,borderRadius:"50%",background:t.coColor}}),t.coName+" · "+t.name+" ("+t.dpu+"d/amb · "+t.people+"p)"
+            )):ce("div",{style:{color:"#B8B5AD",fontSize:12}},"Nenhuma equipe atribuída")
+          ),
+          ce("div",{style:{background:"#F5F4F1",borderRadius:9,padding:"12px 14px"}},
+            ce("div",{style:{fontSize:10,color:"#B8B5AD",marginBottom:2}},"Cronograma"),
+            ce("div",{style:{fontSize:13,fontWeight:700,color:"#1C1B18"}}),sc.startDate||"—"," → ",sc.endDate||"—",
+            ce("div",{style:{fontSize:10,color:"#B8B5AD",marginTop:3}}),rc," quartos · ",sc.startDate&&sc.endDate?diffD(sc.startDate,sc.endDate):"—"," dias"
+          )
+        ),
+        ce("div",{style:{marginBottom:14}},
+          ce("p",{style:{...S.h3,marginBottom:10}},"Quartos — Q"+selFloor),
+          ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}},
+            rooms.map(rm=>{
+              const color=rm.done?"#7AAE90":rm.avgPct>0?"#9BB5C8":"#D6D3CC";
+              return ce("div",{key:rm.r,onClick:()=>setSelRoom(selRoom===rm.r?null:rm.r),style:{padding:"8px",borderRadius:8,background:selRoom===rm.r?"#fff":"#FAFAF9",border:`${selRoom===rm.r?2:1}px solid ${selRoom===rm.r?color:"#EDEBE6"}`,cursor:"pointer",textAlign:"center"}},
+                ce("div",{style:{fontWeight:700,fontSize:12,color:"#1C1B18"}},"Q"+rm.r),
+                ce("div",{style:{fontSize:10,color,fontWeight:700,marginTop:2}},rm.avgPct+"%"),
+                ce("div",{style:{background:"#E8E5DF",borderRadius:2,height:3,marginTop:4}},ce("div",{style:{width:rm.avgPct+"%",background:color,height:3,borderRadius:2}}))
               );
             })
+          )
+        ),
+        selRoom&&ce("div",{style:{background:"#F5F4F1",borderRadius:10,padding:14,marginBottom:14,border:"1px solid #EDEBE6"}},
+          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+            ce("div",{style:{fontWeight:700,fontSize:13,color:"#1C1B18"}},"Quarto "+selRoom+" — Ambientes"),
+            ce("button",{style:{...S.btnS,fontSize:10,padding:"3px 8px"},onClick:()=>setSelRoom(null)},"✕")
           ),
-      // Registro histórico deste quarto
-      ce("div",{style:{marginTop:12}},
-        ce("p",{style:{...S.h3,marginBottom:8}},"Histórico de registros"),
-        grpUpd.filter(u=>u.floor===floor&&u.room===selRoom).reverse().slice(0,5).map(u=>{
-          const co=companies.find(c=>c.teams.some(t=>t.id===u.teamId));
-          return ce("div",{key:u.id||u.ts,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #EDEBE6",fontSize:11}},
-            ce("span",{style:{color:"#6C6960"}},u.date+" · "+(u.environment||"—")),
-            ce("div",{style:{display:"flex",gap:8,alignItems:"center"}},
-              co&&ce("span",{style:S.badge(co.color)},co.name),
-              ce("span",{style:{fontWeight:700,color:u.hitTarget?"#7AAE90":"#C48282"}},(u.actualPct||0)+"%"),
-              !u.hitTarget&&u.cause&&ce("span",{style:{color:"#C4A882"}},"· "+u.cause)
-            )
-          );
-        })
+          Object.keys(acc[selRoom]||{}).length===0?ce("div",{style:{color:"#B8B5AD",fontSize:12}},"Nenhum registro ainda."):
+          ce("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+            Object.entries(acc[selRoom]||{}).map(([env,p])=>{const pct=Math.min(100,Math.round(p));const color=pct>=100?"#7AAE90":pct>=50?"#9BB5C8":"#C4A882";
+              return ce("div",{key:env,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:"#fff",borderRadius:8,border:"1px solid #EDEBE6"}},
+                ce("span",{style:{fontSize:12,fontWeight:600,color:"#1C1B18",flex:1}},env),
+                ce("div",{style:{flex:2,background:"#E8E5DF",borderRadius:3,height:5}},ce("div",{style:{width:pct+"%",background:color,height:5,borderRadius:3}})),
+                ce("span",{style:{fontSize:11,fontWeight:700,color,minWidth:34,textAlign:"right"}},pct+"%"),
+                pct>=100&&ce("span",{style:S.badge("#7AAE90")},"✓")
+              );
+            })
+          )
+        ),
+        ce("div",{style:S.card},
+          ce("p",{style:S.h2},"Gráfico — "+selFloor+"° Pavimento"),
+          ce(LineChart,{data:floorChartData,color:grp.color,h:200})
+        )
       )
-    ),
-    ce("div",{style:S.card},
-      ce("p",{style:S.h2},"Gráfico — "+floor+"° Pavimento"),
-      ce(LineChart,{data:chartData,color:groupColor,height:200})
     )
   );
 }
 
-// ══════════ UPDATE VIEW ══════════
-function UpdateView({groups,currentGroupId,setCurrentGroupId,updates,onPushUpdate,companies,schedules,showToast}){
-  const grp=groups.find(g=>g.id===currentGroupId)||groups[0];
-  const sched=schedules[grp?.id]||{},grpUpd=updates[grp?.id]||[];
+// ══════════ GROUP UPDATE TAB ══════════
+function GroupUpdate({grp,updates,onPushUpdate,companies,schedules,showToast}){
+  const sched=schedules[grp.id]||{},grpUpd=updates[grp.id]||[];
   const allTeams=companies.flatMap(co=>co.teams.map(t=>({...t,coName:co.name,coColor:co.color})));
-
   const [form,setForm]=useState({date:TODAY,floor:5,room:1,environment:"",teamId:""});
   const [hitTarget,setHitTarget]=useState(null);
   const [actualPct,setActualPct]=useState("");
   const [cause,setCause]=useState("");
-
   const rc=sched[form.floor]?.roomCount||12;
   const selTeam=allTeams.find(t=>t.id===form.teamId)||allTeams[0];
-  const dpu=selTeam?.daysPerUnit||3;
-  const env=form.environment||grp?.envName||"Ambiente";
-  const unitInfo=useMemo(()=>getUnitTarget(grpUpd,form.floor,form.room,env,dpu),[grpUpd,form.floor,form.room,env,dpu]);
-
-  // Autocomplete envs from previous entries
+  const dpu=selTeam?.dpu||3;
+  const env=form.environment||grp.envName||"Ambiente";
+  const unitInfo=useMemo(()=>getUT(grpUpd,form.floor,form.room,env,dpu),[grpUpd,form.floor,form.room,env,dpu]);
   const knownEnvs=useMemo(()=>[...new Set(grpUpd.map(u=>u.environment).filter(Boolean))],[grpUpd]);
-
   const reset=()=>{setHitTarget(null);setActualPct("");setCause("");};
-  const handleChange=(field,val)=>{setForm(p=>({...p,[field]:val}));if(field!=="date"&&field!=="teamId")reset();};
-  const handleHit=v=>{setHitTarget(v);if(v){setActualPct(String(unitInfo.target));setCause("");}else setActualPct("");};
+  const hc=(f,v)=>{setForm(p=>({...p,[f]:v}));if(f!=="date"&&f!=="teamId")reset();};
+  const hh=v=>{setHitTarget(v);if(v){setActualPct(String(unitInfo.target));setCause("");}else setActualPct("");};
   const canSave=hitTarget===true||(hitTarget===false&&actualPct!==""&&cause!=="");
-
   const submit=async()=>{
     const ap=hitTarget?unitInfo.target:Math.min(unitInfo.remaining,Math.max(0,+actualPct));
     await onPushUpdate(grp.id,{id:`u${Date.now()}`,date:form.date,floor:form.floor,room:form.room,environment:env,teamId:form.teamId||allTeams[0]?.id||"",targetPct:unitInfo.target,actualPct:ap,hitTarget:hitTarget===true,cause:hitTarget?null:cause,ts:Date.now()});
-    const ni=getUnitTarget([...grpUpd,{floor:form.floor,room:form.room,environment:env,targetPct:unitInfo.target,actualPct:ap}],form.floor,form.room,env,dpu);
-    if(ni.done){const nr=Math.min(form.room+1,rc);setForm(p=>({...p,room:nr,environment:""}));}
-    reset();
-    showToast("✅ Avanço registrado!");
+    const ni=getUT([...grpUpd,{floor:form.floor,room:form.room,environment:env,targetPct:unitInfo.target,actualPct:ap}],form.floor,form.room,env,dpu);
+    if(ni.done){setForm(p=>({...p,room:Math.min(p.room+1,rc),environment:""}));}
+    reset();showToast("✅ Avanço registrado!");
   };
 
-  return ce("div",null,
-    ce("div",{style:{fontSize:18,fontWeight:700,color:"#1C1B18",marginBottom:4}},"Atualização Diária"),
-    ce("p",{style:{fontSize:11,color:"#B8B5AD",marginBottom:14}},"Meta calculada por efetivo e cronograma · Atraso carrega automaticamente para o próximo dia"),
-    ce("div",{style:{display:"flex",gap:7,marginBottom:18,flexWrap:"wrap"}},
-      groups.map(g=>ce("button",{key:g.id,onClick:()=>{setCurrentGroupId(g.id);reset();},style:{padding:"5px 14px",borderRadius:20,border:`1px solid ${currentGroupId===g.id?g.color:"#EDEBE6"}`,background:currentGroupId===g.id?g.color+"22":"#fff",fontSize:11,fontWeight:600,color:currentGroupId===g.id?g.color:"#8C8980"}},g.name))
-    ),
-    ce("div",{style:S.g2},
-      ce("div",{style:{display:"flex",flexDirection:"column",gap:14}},
-        ce("div",{style:S.card},
-          ce("p",{style:S.h3},"Identificação"),
-          ce("div",{style:{...S.g2,marginBottom:10}},
-            ce("div",null,ce("label",{style:S.lbl},"Data"),ce("input",{style:S.inp,type:"date",value:form.date,onChange:e=>handleChange("date",e.target.value)})),
-            ce("div",null,ce("label",{style:S.lbl},"Equipe"),ce("select",{style:S.inp,value:form.teamId||allTeams[0]?.id||"",onChange:e=>handleChange("teamId",e.target.value)},allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" · "+t.name+" ("+t.daysPerUnit+"d/amb)"))))
-          ),
-          ce("div",{style:S.g3},
-            ce("div",null,ce("label",{style:S.lbl},"Pavimento"),ce("select",{style:S.inp,value:form.floor,onChange:e=>handleChange("floor",+e.target.value)},FLOORS.map(f=>ce("option",{key:f,value:f},f+"° Pavimento")))),
-            ce("div",null,ce("label",{style:S.lbl},"Quarto Nº"),ce("select",{style:S.inp,value:form.room,onChange:e=>handleChange("room",+e.target.value)},Array.from({length:rc},(_,i)=>i+1).map(r=>ce("option",{key:r,value:r},"Quarto "+r)))),
-            ce("div",null,
-              ce("label",{style:S.lbl},"Ambiente"),
-              ce("input",{style:S.inp,list:"envs-list",value:form.environment,onChange:e=>handleChange("environment",e.target.value),placeholder:grp?.envName||"Banheiro, Quarto..."}),
-              ce("datalist",{id:"envs-list"},knownEnvs.map(e=>ce("option",{key:e,value:e})))
-            )
-          )
+  return ce("div",{style:S.g2},
+    ce("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+      ce("div",{style:S.card},
+        ce("p",{style:S.h3},"Identificação"),
+        ce("div",{style:{...S.g2,marginBottom:10}},
+          ce("div",null,ce("label",{style:S.lbl},"Data"),ce("input",{style:S.inp,type:"date",value:form.date,onChange:e=>hc("date",e.target.value)})),
+          ce("div",null,ce("label",{style:S.lbl},"Equipe"),ce("select",{style:S.inp,value:form.teamId||allTeams[0]?.id||"",onChange:e=>hc("teamId",e.target.value)},allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" · "+t.name+" ("+t.dpu+"d/amb)"))))
         ),
-        ce("div",{style:{...S.card,border:`1.5px solid ${grp?.color||"#9BB5C8"}22`,background:(grp?.color||"#9BB5C8")+"06"}},
-          unitInfo.done
-          ? ce("div",{style:{textAlign:"center",padding:"12px 0"}},
-              ce("div",{style:{fontSize:24,marginBottom:6}},"✅"),
-              ce("div",{style:{fontWeight:700,color:"#7AAE90",fontSize:14}},"Ambiente concluído!"),
-              ce("div",{style:{fontSize:11,color:"#B8B5AD",marginTop:2}}),"Quarto "+form.room+" · "+env+" no "+form.floor+"° está 100% completo"
-            )
-          : ce("div",null,
-              ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
-                ce("div",null,
-                  ce("div",{style:{fontSize:10,color:"#B8B5AD",marginBottom:2}},"Meta de hoje — Q"+form.room+" · "+env),
-                  ce("div",{style:{fontSize:32,fontWeight:800,color:grp?.color||"#9BB5C8",lineHeight:1}},unitInfo.target+"%"),
-                  unitInfo.carryover>0&&ce("div",{style:{fontSize:10,color:"#C4A882",marginTop:2}},"⚠ inclui "+unitInfo.carryover+"% de atraso anterior")
-                ),
-                ce("div",{style:{textAlign:"right"}},
-                  ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"Já executado"),
-                  ce("div",{style:{fontSize:22,fontWeight:700,color:unitInfo.accumulated>50?"#9BB5C8":"#C4A882"}},unitInfo.accumulated+"%"),
-                  ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"Restante: "+unitInfo.remaining+"%")
-                )
-              ),
-              ce("div",{style:{background:"#E8E5DF",borderRadius:6,height:8,marginBottom:16}},
-                ce("div",{style:{width:unitInfo.accumulated+"%",background:unitInfo.accumulated>50?"#9BB5C8":"#C4A882",height:8,borderRadius:6}})
-              ),
-              ce("p",{style:{...S.h3,marginBottom:10}},"A meta foi atingida hoje?"),
-              ce("div",{style:{display:"flex",gap:10,marginBottom:hitTarget===false?14:0}},
-                ce("button",{onClick:()=>handleHit(true),style:{flex:1,padding:"12px",borderRadius:10,border:`2px solid ${hitTarget===true?"#7AAE90":"#E8E5DF"}`,background:hitTarget===true?"#7AAE90":"#fff",color:hitTarget===true?"#fff":"#6C6960",fontSize:13,fontWeight:700}},"✓  Sim, atingida"),
-                ce("button",{onClick:()=>handleHit(false),style:{flex:1,padding:"12px",borderRadius:10,border:`2px solid ${hitTarget===false?"#C48282":"#E8E5DF"}`,background:hitTarget===false?"#C48282":"#fff",color:hitTarget===false?"#fff":"#6C6960",fontSize:13,fontWeight:700}},"✗  Não, parcial")
-              ),
-              hitTarget===false&&ce("div",{style:{background:"#FBF0F0",borderRadius:10,padding:"12px",border:"1px solid #F0D0D0"}},
-                ce("div",{style:{...S.g2,marginBottom:10}},
-                  ce("div",null,
-                    ce("label",{style:{...S.lbl,color:"#C48282"}},"Executado hoje (%)"),
-                    ce("input",{style:{...S.inp,borderColor:"#E8C4C4"},type:"number",min:"0",max:unitInfo.remaining,placeholder:"ex: 20",value:actualPct,onChange:e=>setActualPct(e.target.value)})
-                  ),
-                  actualPct&&ce("div",{style:{display:"flex",flexDirection:"column",justifyContent:"flex-end"}},
-                    ce("div",{style:{fontSize:10,color:"#C4A882"}},"Atraso do dia"),
-                    ce("div",{style:{fontSize:20,fontWeight:700,color:"#C48282"}},(unitInfo.target-Math.min(unitInfo.target,+actualPct||0))+"%"),
-                    ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"→ carrega amanhã")
-                  )
-                ),
-                ce("label",{style:{...S.lbl,color:"#C48282"}},"Causa do não cumprimento"),
-                ce("select",{style:{...S.inp,borderColor:"#E8C4C4"},value:cause,onChange:e=>setCause(e.target.value)},
-                  ce("option",{value:""},"— Selecione a causa —"),
-                  DELAY_CAUSES.map(c=>ce("option",{key:c,value:c},c))
-                )
-              ),
-              hitTarget!==null&&ce("button",{style:{...S.btnP,width:"100%",padding:"12px",fontSize:13,marginTop:12,opacity:canSave?1:.4},onClick:submit,disabled:!canSave},"💾 Registrar Avanço")
-            )
+        ce("div",{style:S.g3},
+          ce("div",null,ce("label",{style:S.lbl},"Pavimento"),ce("select",{style:S.inp,value:form.floor,onChange:e=>hc("floor",+e.target.value)},FLOORS.map(f=>ce("option",{key:f,value:f},f+"° Pavimento")))),
+          ce("div",null,ce("label",{style:S.lbl},"Quarto Nº"),ce("select",{style:S.inp,value:form.room,onChange:e=>hc("room",+e.target.value)},Array.from({length:rc},(_,i)=>i+1).map(r=>ce("option",{key:r,value:r},"Quarto "+r)))),
+          ce("div",null,ce("label",{style:S.lbl},"Ambiente"),ce("input",{style:S.inp,list:"el",value:form.environment,onChange:e=>hc("environment",e.target.value),placeholder:grp.envName||"Banheiro..."}),ce("datalist",{id:"el"},knownEnvs.map(e=>ce("option",{key:e,value:e}))))
         )
       ),
-      ce("div",{style:{display:"flex",flexDirection:"column",gap:14}},
-        ce("div",{style:S.card},
-          ce("p",{style:S.h3},"Q"+form.room+" — Ambientes registrados"),
-          ce("div",{style:{display:"flex",flexDirection:"column",gap:6}},
-            Object.entries((updates[grp?.id]||[]).filter(u=>u.floor===form.floor&&u.room===form.room).reduce((acc,u)=>{const e=u.environment||"Amb";acc[e]=(acc[e]||0)+(u.actualPct||0);return acc;},{}) ).map(([e,p])=>{
-              const pct=Math.min(100,Math.round(p));
-              const color=pct>=100?"#7AAE90":pct>=50?"#9BB5C8":"#C4A882";
-              return ce("div",{key:e,style:{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"#FAFAF9",borderRadius:8,border:"1px solid #EDEBE6"}},
-                ce("span",{style:{fontSize:12,fontWeight:600,color:"#1C1B18",flex:1}},e),
-                ce("div",{style:{flex:2,background:"#E8E5DF",borderRadius:3,height:5}},
-                  ce("div",{style:{width:pct+"%",background:color,height:5,borderRadius:3}})
-                ),
-                ce("span",{style:{fontSize:11,fontWeight:700,color,minWidth:32,textAlign:"right"}},pct+"%")
-              );
-            })
+      ce("div",{style:{...S.card,border:`1.5px solid ${grp.color}22`,background:grp.color+"06"}},
+        unitInfo.done?ce("div",{style:{textAlign:"center",padding:"12px 0"}},ce("div",{style:{fontSize:24,marginBottom:6}},"✅"),ce("div",{style:{fontWeight:700,color:"#7AAE90",fontSize:14}},"Ambiente concluído!"),ce("div",{style:{fontSize:11,color:"#B8B5AD",marginTop:2}},"Q"+form.room+" · "+env+" no "+form.floor+"° completo"))
+        :ce("div",null,
+          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
+            ce("div",null,ce("div",{style:{fontSize:10,color:"#B8B5AD",marginBottom:2}},"Meta de hoje — Q"+form.room+" · "+env),ce("div",{style:{fontSize:32,fontWeight:800,color:grp.color,lineHeight:1}},unitInfo.target+"%"),unitInfo.carryover>0&&ce("div",{style:{fontSize:10,color:"#C4A882",marginTop:2}},"⚠ +"+unitInfo.carryover+"% de atraso anterior")),
+            ce("div",{style:{textAlign:"right"}},ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"Já executado"),ce("div",{style:{fontSize:22,fontWeight:700,color:unitInfo.accumulated>50?"#9BB5C8":"#C4A882"}},unitInfo.accumulated+"%"),ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"Restante: "+unitInfo.remaining+"%"))
           ),
-          Object.keys((updates[grp?.id]||[]).filter(u=>u.floor===form.floor&&u.room===form.room).reduce((a,u)=>{a[u.environment||"Amb"]=1;return a;},{})).length===0&&
-            ce("p",{style:{color:"#B8B5AD",fontSize:12}},"Nenhum ambiente registrado neste quarto ainda.")
-        ),
-        ce("div",{style:S.card},
-          ce("p",{style:S.h3},"Últimos Registros"),
-          (grpUpd.length===0)?ce("p",{style:{color:"#B8B5AD",fontSize:12}},"Nenhum registro ainda."):
-          [...grpUpd].reverse().slice(0,7).map(u=>{
-            const co=companies.find(c=>c.teams.some(t=>t.id===u.teamId));
-            const gap=(u.targetPct||0)-(u.actualPct||0);
-            return ce("div",{key:u.id||u.ts,style:{padding:"7px 0",borderBottom:"1px solid #F5F4F1",fontSize:11}},
-              ce("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:2}},
-                ce("span",{style:{fontWeight:700,color:"#1C1B18"}},u.date+" · "+u.floor+"° · Q"+u.room+" · "+(u.environment||"?")),
-                ce("span",{style:{fontWeight:700,color:u.hitTarget?"#7AAE90":"#C48282"}},(u.actualPct||0)+"%")
-              ),
-              ce("div",{style:{display:"flex",gap:8}},
-                u.hitTarget?ce("span",{style:{color:"#7AAE90"}},"✓ Meta atingida"):ce("span",{style:{color:"#C48282"}},"✗ Δ "+gap+"%"),
-                u.cause&&ce("span",{style:{color:"#C4A882"}},"· "+u.cause),
-                co&&ce("span",{style:S.badge(co.color)},co.name)
-              )
-            );
-          })
+          ce("div",{style:{background:"#E8E5DF",borderRadius:6,height:8,marginBottom:14}},ce("div",{style:{width:unitInfo.accumulated+"%",background:unitInfo.accumulated>50?"#9BB5C8":"#C4A882",height:8,borderRadius:6}})),
+          ce("p",{style:{...S.h3,marginBottom:10}},"A meta foi atingida hoje?"),
+          ce("div",{style:{display:"flex",gap:10,marginBottom:hitTarget===false?14:0}},
+            ce("button",{onClick:()=>hh(true),style:{flex:1,padding:"12px",borderRadius:10,border:`2px solid ${hitTarget===true?"#7AAE90":"#E8E5DF"}`,background:hitTarget===true?"#7AAE90":"#fff",color:hitTarget===true?"#fff":"#6C6960",fontSize:13,fontWeight:700}},"✓  Sim, atingida"),
+            ce("button",{onClick:()=>hh(false),style:{flex:1,padding:"12px",borderRadius:10,border:`2px solid ${hitTarget===false?"#C48282":"#E8E5DF"}`,background:hitTarget===false?"#C48282":"#fff",color:hitTarget===false?"#fff":"#6C6960",fontSize:13,fontWeight:700}},"✗  Não, parcial")
+          ),
+          hitTarget===false&&ce("div",{style:{background:"#FBF0F0",borderRadius:10,padding:"12px",border:"1px solid #F0D0D0"}},
+            ce("div",{style:{...S.g2,marginBottom:10}},
+              ce("div",null,ce("label",{style:{...S.lbl,color:"#C48282"}},"Executado hoje (%)"),ce("input",{style:{...S.inp,borderColor:"#E8C4C4"},type:"number",min:"0",max:unitInfo.remaining,placeholder:"ex: 20",value:actualPct,onChange:e=>setActualPct(e.target.value)})),
+              actualPct&&ce("div",{style:{display:"flex",flexDirection:"column",justifyContent:"flex-end"}},ce("div",{style:{fontSize:10,color:"#C4A882"}},"Atraso"),ce("div",{style:{fontSize:20,fontWeight:700,color:"#C48282"}},(unitInfo.target-Math.min(unitInfo.target,+actualPct||0))+"%"),ce("div",{style:{fontSize:10,color:"#B8B5AD"}},"→ carrega amanhã"))
+            ),
+            ce("label",{style:{...S.lbl,color:"#C48282"}},"Causa"),
+            ce("select",{style:{...S.inp,borderColor:"#E8C4C4"},value:cause,onChange:e=>setCause(e.target.value)},ce("option",{value:""},"— Selecione —"),DELAY_CAUSES.map(c=>ce("option",{key:c,value:c},c)))
+          ),
+          hitTarget!==null&&ce("button",{style:{...S.btnP,width:"100%",padding:"12px",fontSize:13,marginTop:12,opacity:canSave?1:.4},onClick:submit,disabled:!canSave},"💾 Registrar Avanço")
         )
+      )
+    ),
+    ce("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+      ce("div",{style:S.card},
+        ce("p",{style:S.h3},"Q"+form.room+" — Ambientes registrados"),
+        Object.entries(grpUpd.filter(u=>u.floor===form.floor&&u.room===form.room).reduce((a,u)=>{const e=u.environment||"Amb";a[e]=(a[e]||0)+(u.actualPct||0);return a;},{})).map(([e,p])=>{
+          const pct=Math.min(100,Math.round(p));const color=pct>=100?"#7AAE90":pct>=50?"#9BB5C8":"#C4A882";
+          return ce("div",{key:e,style:{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#FAFAF9",borderRadius:8,border:"1px solid #EDEBE6",marginBottom:6}},
+            ce("span",{style:{fontSize:12,fontWeight:600,flex:1}},e),
+            ce("div",{style:{flex:2,background:"#E8E5DF",borderRadius:3,height:5}},ce("div",{style:{width:pct+"%",background:color,height:5,borderRadius:3}})),
+            ce("span",{style:{fontSize:11,fontWeight:700,color,minWidth:32,textAlign:"right"}},pct+"%")
+          );
+        }),
+        Object.keys(grpUpd.filter(u=>u.floor===form.floor&&u.room===form.room).reduce((a,u)=>{a[u.environment||"Amb"]=1;return a;},{})).length===0&&ce("p",{style:{color:"#B8B5AD",fontSize:12}},"Nenhum registro ainda.")
+      ),
+      ce("div",{style:S.card},
+        ce("p",{style:S.h3},"Últimos Registros"),
+        grpUpd.length===0?ce("p",{style:{color:"#B8B5AD",fontSize:12}},"Nenhum registro ainda."):
+        [...grpUpd].reverse().slice(0,7).map(u=>{
+          const co=companies.find(c=>c.teams.some(t=>t.id===u.teamId));
+          return ce("div",{key:u.id||u.ts,style:{padding:"7px 0",borderBottom:"1px solid #F5F4F1",fontSize:11}},
+            ce("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:2}},
+              ce("span",{style:{fontWeight:700,color:"#1C1B18"}},u.date+" · "+u.floor+"° · Q"+u.room+" · "+(u.environment||"?")),
+              ce("span",{style:{fontWeight:700,color:u.hitTarget?"#7AAE90":"#C48282"}},(u.actualPct||0)+"%")
+            ),
+            ce("div",{style:{display:"flex",gap:8}},
+              u.hitTarget?ce("span",{style:{color:"#7AAE90"}},"✓ Meta atingida"):ce("span",{style:{color:"#C48282"}},"✗ Δ "+((u.targetPct||0)-(u.actualPct||0))+"%"),
+              u.cause&&ce("span",{style:{color:"#C4A882"}},"· "+u.cause),
+              co&&ce("span",{style:S.badge(co.color)},co.name)
+            )
+          );
+        })
       )
     )
   );
 }
 
-// ══════════ ANALYSIS VIEW ══════════
-function AnalysisView({groups,currentGroupId,companies,schedules,updates,aiInsights,isLoadingAI,onRunAI}){
-  const grp=groups.find(g=>g.id===currentGroupId)||groups[0];
-  const insight=typeof aiInsights[grp?.id]==="string"?aiInsights[grp?.id]:"";
-  const grpUpd=updates[grp?.id]||[];
-  const causeStats={};
-  grpUpd.filter(u=>!u.hitTarget&&u.cause).forEach(u=>{causeStats[u.cause]=(causeStats[u.cause]||0)+1;});
+// ══════════ GROUP SCHEDULE TAB ══════════
+function GroupSchedule({grp,schedules,setSchedules,onSave,showToast}){
+  const [saving,setSaving]=useState(false);
+  const sc=schedules[grp.id]||{};
+  const upd=(fl,f,v)=>setSchedules(p=>({...p,[grp.id]:{...(p[grp.id]||{}),[fl]:{...(p[grp.id]||{})[fl]||{},[f]:f==="roomCount"?+v:v}}}));
+  const save=async()=>{setSaving(true);await onSave();setSaving(false);showToast("✅ Cronograma salvo!");};
+  return ce("div",null,
+    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+      ce("p",{style:{...S.h2,margin:0}},"Cronograma Base — "+grp.name),
+      ce("button",{style:S.btnP,onClick:save,disabled:saving},saving?"Salvando...":"💾 Salvar")
+    ),
+    ce("div",{style:S.g2},
+      FLOORS.map(fl=>{
+        const s=sc[fl]||{};
+        return ce("div",{key:fl,style:S.card},
+          ce("div",{style:{fontWeight:700,fontSize:12,color:"#1C1B18",marginBottom:10}},fl+"° Pavimento"),
+          ce("div",{style:S.g3},
+            ce("div",null,ce("label",{style:S.lbl},"Início"),ce("input",{style:S.inp,type:"date",value:s.startDate||"",onChange:e=>upd(fl,"startDate",e.target.value)})),
+            ce("div",null,ce("label",{style:S.lbl},"Término"),ce("input",{style:S.inp,type:"date",value:s.endDate||"",onChange:e=>upd(fl,"endDate",e.target.value)})),
+            ce("div",null,ce("label",{style:S.lbl},"Quartos"),ce("input",{style:S.inp,type:"number",min:"1",value:s.roomCount||12,onChange:e=>upd(fl,"roomCount",e.target.value)}))
+          )
+        );
+      })
+    )
+  );
+}
+
+// ══════════ GROUP TEAMS TAB ══════════
+function GroupTeams({grp,companies,setCompanies,onSave,showToast}){
+  const [saving,setSaving]=useState(false);
+  const [showAddCo,setShowAddCo]=useState(false);
+  const [newCo,setNewCo]=useState({name:"",color:"#9BB5C8"});
+  const [showAddTeam,setShowAddTeam]=useState(null);
+  const [newTeam,setNewTeam]=useState({name:"Equipe B",people:3,dpu:3});
+  const save=async()=>{setSaving(true);await onSave();setSaving(false);showToast("✅ Equipes salvas!");};
+  const addCo=()=>{if(!newCo.name.trim())return;setCompanies(p=>[...p,{id:`c${Date.now()}`,name:newCo.name,color:newCo.color,teams:[]}]);setNewCo({name:"",color:"#9BB5C8"});setShowAddCo(false);};
+  const remCo=id=>{if(!window.confirm("Remover empresa?"))return;setCompanies(p=>p.filter(c=>c.id!==id));};
+  const addTeam=coId=>{if(!newTeam.name.trim())return;setCompanies(p=>p.map(c=>c.id===coId?{...c,teams:[...c.teams,{id:`t${Date.now()}`,name:newTeam.name,people:newTeam.people,dpu:newTeam.dpu,assignedFloors:[]}]}:c));setNewTeam({name:"Equipe B",people:3,dpu:3});setShowAddTeam(null);};
+  const remTeam=(coId,tId)=>{setCompanies(p=>p.map(c=>c.id===coId?{...c,teams:c.teams.filter(t=>t.id!==tId)}:c));};
+  const updTeam=(coId,tId,f,v)=>setCompanies(p=>p.map(c=>c.id===coId?{...c,teams:c.teams.map(t=>t.id===tId?{...t,[f]:v}:t)}:c));
+  const togFloor=(coId,tId,fl)=>{const t=companies.find(c=>c.id===coId)?.teams.find(t=>t.id===tId);const cur=t?.assignedFloors||[];updTeam(coId,tId,"assignedFloors",cur.includes(fl)?cur.filter(f=>f!==fl):[...cur,fl].sort((a,b)=>a-b));};
+  return ce("div",null,
+    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+      ce("p",{style:{...S.h2,margin:0}},"Empresas & Equipes"),
+      ce("div",{style:{display:"flex",gap:8}},
+        ce("button",{style:S.btnAdd,onClick:()=>setShowAddCo(!showAddCo)},"+ Nova Empresa"),
+        ce("button",{style:S.btnP,onClick:save,disabled:saving},saving?"Salvando...":"💾 Salvar")
+      )
+    ),
+    showAddCo&&ce("div",{style:{...S.card,marginBottom:12,border:"1.5px solid #C4DDD0"}},
+      ce("p",{style:{...S.h3,color:"#7AAE90"}},"Nova Empresa"),
+      ce("div",{style:{display:"flex",gap:10,alignItems:"flex-end"}},
+        ce("div",{style:{flex:1}},ce("label",{style:S.lbl},"Nome"),ce("input",{style:S.inp,placeholder:"Nome da empresa",value:newCo.name,onChange:e=>setNewCo(p=>({...p,name:e.target.value})),onKeyDown:e=>e.key==="Enter"&&addCo()})),
+        ce("div",null,ce("label",{style:S.lbl},"Cor"),ce("input",{type:"color",value:newCo.color,onChange:e=>setNewCo(p=>({...p,color:e.target.value})),style:{width:42,height:36,borderRadius:7,border:"1px solid #E8E5DF",cursor:"pointer",padding:2,background:"transparent"}})),
+        ce("button",{style:S.btnP,onClick:addCo},"Adicionar"),
+        ce("button",{style:S.btnS,onClick:()=>setShowAddCo(false)},"Cancelar")
+      )
+    ),
+    companies.map(co=>ce("div",{key:co.id,style:{...S.card,marginBottom:12}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        ce("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          ce("div",{style:{width:10,height:10,borderRadius:"50%",background:co.color}}),
+          ce("span",{style:{fontWeight:700,fontSize:14,color:"#1C1B18"}},co.name),
+          ce("span",{style:S.badge("#B8B5AD")},co.teams.length+" equipe"+( co.teams.length!==1?"s":""))
+        ),
+        ce("div",{style:{display:"flex",gap:8}},
+          ce("button",{style:S.btnAdd,onClick:()=>setShowAddTeam(showAddTeam===co.id?null:co.id)},"+ Equipe"),
+          ce("button",{style:S.btnD,onClick:()=>remCo(co.id)},"Remover empresa")
+        )
+      ),
+      co.teams.map(t=>ce("div",{key:t.id,style:{background:"#F5F4F1",borderRadius:8,padding:12,marginBottom:8}},
+        ce("div",{style:{...S.g3,marginBottom:10}},
+          ce("div",null,ce("label",{style:S.lbl},"Nome"),ce("input",{style:S.inp,value:t.name,onChange:e=>updTeam(co.id,t.id,"name",e.target.value)})),
+          ce("div",null,ce("label",{style:S.lbl},"Pessoas"),ce("input",{style:S.inp,type:"number",min:"1",value:t.people,onChange:e=>updTeam(co.id,t.id,"people",+e.target.value)})),
+          ce("div",null,ce("label",{style:S.lbl},"Dias/Ambiente"),ce("input",{style:S.inp,type:"number",min:"1",value:t.dpu||3,onChange:e=>updTeam(co.id,t.id,"dpu",+e.target.value)}))
+        ),
+        ce("div",null,
+          ce("label",{style:S.lbl},"Andares Atribuídos"),
+          ce("div",{style:{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}},
+            FLOORS.map(f=>ce("button",{key:f,onClick:()=>togFloor(co.id,t.id,f),style:{padding:"3px 9px",borderRadius:5,border:"none",fontSize:11,fontWeight:700,background:(t.assignedFloors||[]).includes(f)?co.color:"#E8E5DF",color:(t.assignedFloors||[]).includes(f)?"#fff":"#8C8980"}},f+"°"))
+          )
+        ),
+        ce("div",{style:{display:"flex",justifyContent:"flex-end",marginTop:8}},
+          ce("button",{style:S.btnD,onClick:()=>remTeam(co.id,t.id)},"✕ Remover equipe")
+        )
+      )),
+      showAddTeam===co.id&&ce("div",{style:{background:"#F0F7F3",borderRadius:8,padding:12,border:"1px solid #C4DDD0"}},
+        ce("p",{style:{...S.h3,color:"#7AAE90",marginBottom:10}},"Nova Equipe"),
+        ce("div",{style:S.g3},
+          ce("div",null,ce("label",{style:S.lbl},"Nome"),ce("input",{style:S.inp,placeholder:"Equipe B",value:newTeam.name,onChange:e=>setNewTeam(p=>({...p,name:e.target.value}))})),
+          ce("div",null,ce("label",{style:S.lbl},"Pessoas"),ce("input",{style:S.inp,type:"number",min:"1",value:newTeam.people,onChange:e=>setNewTeam(p=>({...p,people:+e.target.value}))})),
+          ce("div",null,ce("label",{style:S.lbl},"Dias/Ambiente"),ce("input",{style:S.inp,type:"number",min:"1",value:newTeam.dpu,onChange:e=>setNewTeam(p=>({...p,dpu:+e.target.value}))}))
+        ),
+        ce("div",{style:{display:"flex",gap:8,marginTop:10}},
+          ce("button",{style:S.btnP,onClick:()=>addTeam(co.id)},"Salvar Equipe"),
+          ce("button",{style:S.btnS,onClick:()=>setShowAddTeam(null)},"Cancelar")
+        )
+      )
+    ))
+  );
+}
+
+// ══════════ GROUP ANALYSIS TAB ══════════
+function GroupAnalysis({grp,companies,schedules,updates,aiInsights,isLoadingAI,onRunAI}){
+  const insight=typeof aiInsights[grp.id]==="string"?aiInsights[grp.id]:"";
+  const grpUpd=updates[grp.id]||[];
+  const causeStats={};grpUpd.filter(u=>!u.hitTarget&&u.cause).forEach(u=>{causeStats[u.cause]=(causeStats[u.cause]||0)+1;});
   const topCauses=Object.entries(causeStats).sort((a,b)=>b[1]-a[1]);
   const total=Object.values(causeStats).reduce((a,b)=>a+b,0);
   const totalGap=grpUpd.filter(u=>!u.hitTarget).reduce((s,u)=>s+((u.targetPct||0)-(u.actualPct||0)),0);
-  const progress=useMemo(()=>computeProgress(updates,schedules,currentGroupId),[updates,schedules,currentGroupId]);
-  const [filterFloor,setFilterFloor]=useState("");
-  const [filterTeam,setFilterTeam]=useState("");
+  const progress=useMemo(()=>computeProgress(updates,schedules,grp.id),[updates,schedules,grp.id]);
+  const [ff,setFf]=useState("");const [ft,setFt]=useState("");
   const allTeams=companies.flatMap(co=>co.teams.map(t=>({...t,coName:co.name,coColor:co.color})));
-
-  const filteredUpd=grpUpd.filter(u=>{
-    if(filterFloor&&u.floor!==+filterFloor)return false;
-    if(filterTeam&&u.teamId!==filterTeam)return false;
-    return!u.hitTarget;
-  });
-
+  const filteredUpd=grpUpd.filter(u=>(!ff||u.floor===+ff)&&(!ft||u.teamId===ft)&&!u.hitTarget);
   return ce("div",null,
-    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},
-      ce("div",null,
-        ce("div",{style:{fontSize:18,fontWeight:700,color:"#1C1B18"}},"Análise — "+grp?.name),
-        ce("p",{style:{fontSize:11,color:"#B8B5AD",marginTop:4}},"Relatório executivo para apresentação ao CEO")
-      ),
-      ce("button",{style:S.btnP,onClick:()=>onRunAI(grp?.id),disabled:isLoadingAI},isLoadingAI?"Analisando...":"✦ Gerar Análise IA")
+    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
+      ce("p",{style:{...S.h2,margin:0}},"Análise — "+grp.name),
+      ce("button",{style:S.btnP,onClick:()=>onRunAI(grp.id),disabled:isLoadingAI},isLoadingAI?"Analisando...":"✦ Gerar Análise IA")
     ),
     ce("div",{style:{...S.g3,marginBottom:14}},
-      ce("div",{style:S.card},
-        ce("p",{style:S.h2},"Atraso Acumulado"),
-        ce("div",{style:{fontSize:28,fontWeight:700,color:"#C48282",marginBottom:4}},totalGap+"%"),
-        ce("div",{style:{fontSize:11,color:"#B8B5AD"}}),grpUpd.filter(u=>!u.hitTarget).length," dias não atingidos"
-      ),
-      ce("div",{style:S.card},
-        ce("p",{style:S.h2},"Quartos Completos"),
-        ce("div",{style:{fontSize:28,fontWeight:700,color:"#7AAE90",marginBottom:4}},progress.totals.done+"/"+progress.totals.total),
-        ce("div",{style:{fontSize:11,color:"#B8B5AD"}},"no grupo "+grp?.name)
-      ),
-      ce("div",{style:S.card},
-        ce("p",{style:S.h2},"Principais Causas"),
-        topCauses.slice(0,3).map(([c,n])=>ce("div",{key:c,style:{fontSize:11,color:"#6C6960",marginBottom:4,display:"flex",justifyContent:"space-between"}},
-          ce("span",null,c),ce("span",{style:{fontWeight:700,color:"#C4A882"}},n+"x")
-        )),
-        topCauses.length===0&&ce("span",{style:{color:"#7AAE90",fontSize:11}},"Nenhum atraso!")
-      )
+      ce("div",{style:S.card},ce("p",{style:S.h2},"Atraso Acumulado"),ce("div",{style:{fontSize:28,fontWeight:700,color:"#C48282",marginBottom:4}},totalGap+"%"),ce("div",{style:{fontSize:11,color:"#B8B5AD"}},grpUpd.filter(u=>!u.hitTarget).length+" dias não atingidos")),
+      ce("div",{style:S.card},ce("p",{style:S.h2},"Quartos Completos"),ce("div",{style:{fontSize:28,fontWeight:700,color:"#7AAE90",marginBottom:4}},progress.totals.done+"/"+progress.totals.total),ce("div",{style:{fontSize:11,color:"#B8B5AD"}},"no grupo "+grp.name)),
+      ce("div",{style:S.card},ce("p",{style:S.h2},"Top Causas"),topCauses.slice(0,3).map(([c,n])=>ce("div",{key:c,style:{fontSize:11,color:"#6C6960",marginBottom:4,display:"flex",justifyContent:"space-between"}},ce("span",null,c),ce("span",{style:{fontWeight:700,color:"#C4A882"}},n+"x"))),topCauses.length===0&&ce("span",{style:{color:"#7AAE90",fontSize:11}},"Nenhum atraso! 🟢"))
     ),
-    // Filtros de infrações
     ce("div",{style:{...S.card,marginBottom:14}},
-      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
         ce("p",{style:{...S.h2,margin:0}},"Registros com Atraso — Filtros"),
         ce("div",{style:{display:"flex",gap:8}},
-          ce("select",{style:{...S.inp,width:"auto",fontSize:11},value:filterFloor,onChange:e=>setFilterFloor(e.target.value)},
-            ce("option",{value:""},"Todos os andares"),
-            FLOORS.map(f=>ce("option",{key:f,value:f},f+"° Pavimento"))
-          ),
-          ce("select",{style:{...S.inp,width:"auto",fontSize:11},value:filterTeam,onChange:e=>setFilterTeam(e.target.value)},
-            ce("option",{value:""},"Todas as equipes"),
-            allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" · "+t.name))
-          )
+          ce("select",{style:{...S.inp,width:"auto",fontSize:11},value:ff,onChange:e=>setFf(e.target.value)},ce("option",{value:""},"Todos os andares"),FLOORS.map(f=>ce("option",{key:f,value:f},f+"° Pavimento"))),
+          ce("select",{style:{...S.inp,width:"auto",fontSize:11},value:ft,onChange:e=>setFt(e.target.value)},ce("option",{value:""},"Todas as equipes"),allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" · "+t.name)))
         )
       ),
-      filteredUpd.length===0?ce("div",{style:{padding:"20px 0",textAlign:"center",color:"#B8B5AD",fontSize:12}},"Nenhum atraso encontrado com esses filtros 🟢"):
+      filteredUpd.length===0?ce("div",{style:{padding:"16px 0",textAlign:"center",color:"#B8B5AD",fontSize:12}},"Nenhum atraso com esses filtros 🟢"):
       ce("div",{style:{display:"flex",flexDirection:"column",gap:6}},
         filteredUpd.slice(0,20).map(u=>{
-          const co=companies.find(c=>c.teams.some(t=>t.id===u.teamId));
-          const gap=(u.targetPct||0)-(u.actualPct||0);
+          const co=companies.find(c=>c.teams.some(t=>t.id===u.teamId));const gap=(u.targetPct||0)-(u.actualPct||0);
           return ce("div",{key:u.id||u.ts,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#FAFAF9",borderRadius:8,border:"1px solid #EDEBE6",fontSize:11}},
-            ce("div",null,
-              ce("div",{style:{fontWeight:700,color:"#1C1B18"}},u.date+" · "+u.floor+"° Pav · Q"+u.room+" · "+(u.environment||"—")),
-              ce("div",{style:{color:"#8C8980",marginTop:2}},u.cause||"Sem causa registrada")
-            ),
-            ce("div",{style:{display:"flex",gap:8,alignItems:"center"}},
-              co&&ce("span",{style:S.badge(co.color)},co.name),
-              ce("span",{style:{fontWeight:700,color:"#C48282"}},"-"+gap+"%")
-            )
+            ce("div",null,ce("div",{style:{fontWeight:700,color:"#1C1B18"}},u.date+" · "+u.floor+"° · Q"+u.room+" · "+(u.environment||"—")),ce("div",{style:{color:"#8C8980",marginTop:2}},u.cause||"Sem causa")),
+            ce("div",{style:{display:"flex",gap:8,alignItems:"center"}},co&&ce("span",{style:S.badge(co.color)},co.name),ce("span",{style:{fontWeight:700,color:"#C48282"}},"-"+gap+"%"))
           );
         })
       )
     ),
     ce("div",{style:{...S.card,background:"#FAFAF9"}},
       ce("p",{style:S.h2},"✦ Análise & Recomendações IA"),
-      isLoadingAI?ce("div",{style:{padding:"30px 0",textAlign:"center",color:"#B8B5AD",fontSize:13,fontWeight:600}},"Analisando dados da obra...")
-      :insight?ce("div",{style:{fontSize:12,lineHeight:1.9,whiteSpace:"pre-line",color:"#6C6960"}},insight)
-      :ce("div",{style:{padding:"30px 0",textAlign:"center"}},
-        ce("div",{style:{fontSize:13,color:"#B8B5AD",marginBottom:16}},"Clique para gerar recomendações executivas"),
-        ce("button",{style:S.btnP,onClick:()=>onRunAI(grp?.id)},"✦ Gerar Análise")
-      )
+      isLoadingAI?ce("div",{style:{padding:"30px 0",textAlign:"center",color:"#B8B5AD",fontSize:13}},"Analisando dados da obra..."):
+      insight?ce("div",{style:{fontSize:12,lineHeight:1.9,whiteSpace:"pre-line",color:"#6C6960"}},insight):
+      ce("div",{style:{padding:"30px 0",textAlign:"center"}},ce("div",{style:{fontSize:13,color:"#B8B5AD",marginBottom:14}},"Clique para gerar recomendações executivas"),ce("button",{style:S.btnP,onClick:()=>onRunAI(grp.id)},"✦ Gerar Análise"))
     )
   );
 }
 
-// ══════════ DASHBOARD VIEW ══════════
-function DashboardView({groups,currentGroupId,setCurrentGroupId,updates,schedules,companies,setView,aiInsights}){
-  const grp=groups.find(g=>g.id===currentGroupId)||groups[0];
-  const [selectedFloor,setSelectedFloor]=useState(null);
-  const progress=useMemo(()=>computeProgress(updates,schedules,currentGroupId),[updates,schedules,currentGroupId]);
-  const chartData=useMemo(()=>computeChartData(updates,schedules,currentGroupId,null),[updates,schedules,currentGroupId]);
-  const {totals,floorStats}=progress;
-  const grpUpd=updates[currentGroupId]||[];
-  const avgPct=totals.total>0?Math.round(totals.sumPct/totals.total):0;
-  const daysActive=grpUpd.length>0?Math.max(1,diffD(grpUpd[0]?.date||TODAY,TODAY)+1):1;
-  const totalActual=grpUpd.reduce((s,u)=>s+(u.actualPct||0),0);
-  const dailyPace=daysActive>0?(totalActual/daysActive).toFixed(1):0;
-  const atRisk=FLOORS.filter(f=>floorStats[f]?.variance<-10).length;
-  const aiText=typeof aiInsights[currentGroupId]==="string"?aiInsights[currentGroupId]:"";
-
+// ══════════ OVERVIEW (no group selected) ══════════
+function Overview({groups,updates,schedules,setSelectedGroup}){
   return ce("div",null,
-    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}},
-      ce("div",null,
-        ce("div",{style:{fontSize:20,fontWeight:700,color:"#1C1B18",letterSpacing:"-.3px"}},grp?.name||"Dashboard"),
-        ce("div",{style:{color:"#B8B5AD",fontSize:11,marginTop:3}},"Sofitel RJ · "+TODAY)
-      ),
-      ce("div",{style:{display:"flex",gap:8}},
-        ce("button",{style:S.btnS,onClick:()=>setView("analysis")},"✦ Análise IA"),
-        ce("button",{style:S.btnP,onClick:()=>setView("update")},"+ Atualização")
-      )
-    ),
-    // KPIs compactos
-    ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}},
-      [{label:"Avanço Médio",value:avgPct+"%",sub:"média dos ambientes",color:grp?.color||"#9BB5C8",bg:"#F0F4F8"},
-       {label:"Quartos Completos",value:String(totals.done),sub:"de "+totals.total+" total",color:"#7AAE90",bg:"#F0F7F3"},
-       {label:"Ritmo Diário",value:dailyPace+"%",sub:"avanço/dia",color:"#C4B89A",bg:"#FAF8F3"},
-       {label:"Andares em Risco",value:String(atRisk),sub:"abaixo do planejado",color:"#C4A882",bg:"#FAF6F0"},
-      ].map((kpi,i)=>ce("div",{key:i,style:{background:kpi.bg,borderRadius:11,padding:"14px 16px",borderTop:`3px solid ${kpi.color}`,border:`1px solid ${kpi.color}22`}},
-        ce("div",{style:{fontSize:9,color:"#B8B5AD",fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:6}},kpi.label),
-        ce("div",{style:{fontSize:24,fontWeight:700,color:kpi.color,lineHeight:1,marginBottom:3}},kpi.value),
-        ce("div",{style:{fontSize:10,color:"#B8B5AD"}},kpi.sub)
-      ))
-    ),
-    // Gráfico grande
-    ce("div",{style:{...S.card,marginBottom:14}},
-      ce("p",{style:S.h2},"Cronograma Base · Avanço % e Tendência — "+grp?.name),
-      ce(LineChart,{data:chartData,color:grp?.color,height:250})
-    ),
-    // Floor grid
-    ce("div",{style:S.card},
-      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
-        ce("p",{style:{...S.h2,margin:0}},"Status por Pavimento — Clique para ver detalhes"),
-        selectedFloor&&ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 10px"},onClick:()=>setSelectedFloor(null)},"Fechar detalhe")
-      ),
-      ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:selectedFloor?14:0}},
-        FLOORS.map(fl=>{
-          const s=floorStats[fl];
-          const color=STATUS_COLOR(s.variance);
-          const bg=STATUS_BG(s.variance);
-          const isSelected=selectedFloor===fl;
-          const co=companies.find(c=>c.teams.some(t=>t.assignedFloors?.includes(fl)));
-          return ce("div",{key:fl,onClick:()=>setSelectedFloor(isSelected?null:fl),style:{borderRadius:10,padding:"11px 13px",background:isSelected?"#fff":bg,border:`${isSelected?"2px":"1px"} solid ${isSelected?color:color+"44"}`,cursor:"pointer",transition:"all .15s"}},
-            ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
-              ce("span",{style:{fontWeight:700,fontSize:14,color:"#1C1B18"}},fl+"°"),
-              ce("span",{style:{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10,background:color+"22",color}},STATUS_LABEL(s.variance))
-            ),
-            co&&ce("div",{style:{fontSize:9,color:"#B8B5AD",marginBottom:5}},co.name),
-            ce("div",{style:{background:"#E8E5DF",borderRadius:3,height:4,marginBottom:4}},
-              ce("div",{style:{width:Math.min(100,s.actualPct)+"%",background:color,height:4,borderRadius:3}})
-            ),
-            ce("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:"#B8B5AD",fontWeight:600}},
-              ce("span",null,"Real "+s.actualPct.toFixed(0)+"%"),
-              ce("span",null,"Plan "+s.plannedPct.toFixed(0)+"%")
-            ),
-            ce("div",{style:{fontSize:9,color:"#C4C1BA",marginTop:2}},s.doneRooms+"/"+s.roomCount+" completos")
-          );
-        })
-      ),
-      selectedFloor&&ce(FloorDetail,{
-        floor:selectedFloor,grp,
-        grpUpd:updates[currentGroupId]||[],
-        sched:schedules[currentGroupId]||{},
-        companies,onClose:()=>setSelectedFloor(null),
-        groupColor:grp?.color
+    ce("div",{style:{fontSize:20,fontWeight:700,color:"#1C1B18",marginBottom:4}},"Visão Geral da Obra"),
+    ce("p",{style:{fontSize:11,color:"#B8B5AD",marginBottom:20}},"Selecione um grupo de serviço na sidebar ou clique abaixo para acessar"),
+    ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}},
+      groups.map(g=>{
+        const progress=computeProgress(updates,schedules,g.id);
+        const avg=progress.totals.total>0?Math.round(progress.totals.sumPct/progress.totals.total):0;
+        return ce("div",{key:g.id,onClick:()=>setSelectedGroup(g.id),style:{...S.card,cursor:"pointer",borderTop:`3px solid ${g.color}`,borderLeft:`1px solid ${g.color}22`}},
+          ce("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
+            ce("div",{style:{width:10,height:10,borderRadius:"50%",background:g.color}}),
+            ce("span",{style:{fontWeight:700,fontSize:13,color:"#1C1B18"}},g.name)
+          ),
+          ce("div",{style:{fontSize:26,fontWeight:700,color:g.color,marginBottom:4}},avg+"%"),
+          ce("div",{style:{background:"#E8E5DF",borderRadius:3,height:5,marginBottom:6}},ce("div",{style:{width:avg+"%",background:g.color,height:5,borderRadius:3}})),
+          ce("div",{style:{fontSize:10,color:"#B8B5AD"}},progress.totals.done+"/"+progress.totals.total+" ambientes completos"),
+          ce("div",{style:{fontSize:10,color:"#B8B5AD",marginTop:2}},(updates[g.id]||[]).length+" registros")
+        );
       })
-    ),
-    aiText&&ce("div",{style:{...S.card,marginTop:14,background:"#FAFAF9"}},
-      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        ce("span",{style:{fontWeight:700,fontSize:12,color:"#1C1B18"}},"✦ Última análise IA — "+grp?.name),
-        ce("button",{style:{...S.btnS,fontSize:10,padding:"4px 10px"},onClick:()=>setView("analysis")},"Ver completo →")
-      ),
-      ce("div",{style:{fontSize:11,lineHeight:1.8,color:"#8C8980",whiteSpace:"pre-line"}},aiText.split("\n").slice(0,8).join("\n")+(aiText.split("\n").length>8?"\n...":""))
-    )
-  );
-}
-
-// ══════════ CONFIG VIEW ══════════
-function ConfigView({groups,setGroups,companies,setCompanies,schedules,setSchedules,onSave,showToast}){
-  const [tab,setTab]=useState("groups");
-  const [selG,setSelG]=useState(groups[0]?.id||null);
-  const [saving,setSaving]=useState(false);
-  const curG=groups.find(g=>g.id===selG);
-  const updG=(id,f,v)=>setGroups(p=>p.map(g=>g.id===id?{...g,[f]:v}:g));
-  const addG=()=>{const name=window.prompt("Nome do grupo:");if(!name?.trim())return;const id=`g${Date.now()}`;setGroups(p=>[...p,{id,name:name.trim(),color:"#9BB5C8",envName:"Ambiente"}]);setSchedules(p=>({...p,[id]:genSched()}));setSelG(id);};
-  const remG=id=>{if(!window.confirm("Remover?"))return;setGroups(p=>p.filter(g=>g.id!==id));setSelG(groups.find(g=>g.id!==id)?.id||null);};
-  const save=async()=>{setSaving(true);await onSave(groups,companies,schedules);setSaving(false);showToast("✅ Salvo!");};
-  const tS=id=>({padding:"8px 16px",border:"none",background:"transparent",fontSize:12,fontWeight:700,color:tab===id?"#1C1B18":"#B8B5AD",borderBottom:tab===id?"2px solid #1C1B18":"2px solid transparent",marginBottom:-1,cursor:"pointer"});
-  return ce("div",null,
-    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
-      ce("div",{style:{fontSize:18,fontWeight:700}},"Configurações"),
-      ce("button",{style:S.btnP,onClick:save,disabled:saving},saving?"Salvando...":"💾 Salvar")
-    ),
-    ce("p",{style:{fontSize:11,color:"#B8B5AD",marginBottom:18}},"Rascunho até clicar em Salvar."),
-    ce("div",{style:{display:"flex",borderBottom:"1px solid #EDEBE6",marginBottom:20}},
-      ["groups","schedule","companies"].map(id=>ce("button",{key:id,style:tS(id),onClick:()=>setTab(id)},id==="groups"?"Grupos":id==="schedule"?"Cronograma":"Empresas & Equipes"))
-    ),
-    tab==="groups"&&ce("div",{style:S.g2},
-      ce("div",null,
-        ce("div",{style:{...S.card,marginBottom:12}},
-          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
-            ce("p",{style:{...S.h3,margin:0}},"Grupos de Serviço"),
-            ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 10px"},onClick:addG},"+ Novo")
-          ),
-          groups.map(g=>ce("div",{key:g.id,onClick:()=>setSelG(g.id),style:{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,cursor:"pointer",background:selG===g.id?"#F5F4F1":"transparent",marginBottom:4}},
-            ce("div",{style:{width:10,height:10,borderRadius:"50%",background:g.color,flexShrink:0}}),
-            ce("span",{style:{fontSize:12,fontWeight:selG===g.id?700:500,flex:1}},g.name),
-            ce("span",{style:{fontSize:10,color:"#B8B5AD"}},g.envName)
-          ))
-        )
-      ),
-      curG&&ce("div",null,
-        ce("div",{style:S.card},
-          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
-            ce("p",{style:{...S.h3,margin:0}},curG.name),
-            ce("button",{style:S.btnD,onClick:()=>remG(curG.id)},"Remover")
-          ),
-          ce("div",{style:{marginBottom:10}},ce("label",{style:S.lbl},"Nome"),ce("input",{style:S.inp,value:curG.name,onChange:e=>updG(curG.id,"name",e.target.value)})),
-          ce("div",{style:{...S.g2,marginBottom:10}},
-            ce("div",null,ce("label",{style:S.lbl},"Cor"),ce("input",{type:"color",value:curG.color,onChange:e=>updG(curG.id,"color",e.target.value),style:{width:42,height:34,borderRadius:7,border:"1px solid #E8E5DF",cursor:"pointer",padding:2,background:"transparent"}})),
-            ce("div",null,ce("label",{style:S.lbl},"Tipo de Ambiente"),ce("input",{style:S.inp,value:curG.envName,onChange:e=>updG(curG.id,"envName",e.target.value),placeholder:"Banheiro, Quarto, Vão..."}))
-          ),
-          ce("div",{style:{padding:"10px 12px",background:"#F5F4F1",borderRadius:8,fontSize:11,color:"#8C8980"}},"O campo de ambiente é preenchido livremente na Atualização Diária. Esta configuração é apenas a sugestão padrão.")
-        )
-      )
-    ),
-    tab==="schedule"&&ce("div",null,
-      ce("div",{style:{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}},
-        groups.map(g=>ce("button",{key:g.id,onClick:()=>setSelG(g.id),style:{padding:"5px 14px",borderRadius:20,border:`1px solid ${selG===g.id?g.color:"#EDEBE6"}`,background:selG===g.id?g.color+"22":"#fff",fontSize:11,fontWeight:600,color:selG===g.id?g.color:"#8C8980"}},g.name))
-      ),
-      curG&&ce("div",{style:S.g2},
-        FLOORS.map(fl=>{
-          const sc=(schedules[curG.id]||{})[fl]||{};
-          const u=(f,v)=>setSchedules(p=>({...p,[curG.id]:{...(p[curG.id]||{}),[fl]:{...(p[curG.id]||{})[fl]||{},[f]:f==="roomCount"?+v:v}}}));
-          return ce("div",{key:fl,style:S.card},
-            ce("div",{style:{fontWeight:700,fontSize:12,color:"#1C1B18",marginBottom:10}},fl+"° Pavimento"),
-            ce("div",{style:S.g3},
-              ce("div",null,ce("label",{style:S.lbl},"Início"),ce("input",{style:S.inp,type:"date",value:sc.startDate||"",onChange:e=>u("startDate",e.target.value)})),
-              ce("div",null,ce("label",{style:S.lbl},"Término"),ce("input",{style:S.inp,type:"date",value:sc.endDate||"",onChange:e=>u("endDate",e.target.value)})),
-              ce("div",null,ce("label",{style:S.lbl},"Quartos"),ce("input",{style:S.inp,type:"number",min:"1",value:sc.roomCount||12,onChange:e=>u("roomCount",e.target.value)}))
-            )
-          );
-        })
-      )
-    ),
-    tab==="companies"&&ce("div",null,
-      ce("p",{style:{fontSize:11,color:"#B8B5AD",marginBottom:14}},"Empresas e equipes compartilhadas entre todos os grupos."),
-      companies.map(co=>ce("div",{key:co.id,style:{...S.card,marginBottom:12}},
-        ce("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
-          ce("div",{style:{width:10,height:10,borderRadius:"50%",background:co.color}}),
-          ce("span",{style:{fontWeight:700,fontSize:14}},co.name)
-        ),
-        co.teams.map(t=>ce("div",{key:t.id,style:{background:"#F5F4F1",borderRadius:8,padding:12,marginBottom:8}},
-          ce("div",{style:S.g3},
-            ce("div",null,ce("label",{style:S.lbl},"Nome"),ce("input",{style:S.inp,value:t.name,onChange:e=>setCompanies(p=>p.map(c=>c.id===co.id?{...c,teams:c.teams.map(tm=>tm.id===t.id?{...tm,name:e.target.value}:tm)}:c))})),
-            ce("div",null,ce("label",{style:S.lbl},"Pessoas"),ce("input",{style:S.inp,type:"number",min:"1",value:t.people,onChange:e=>setCompanies(p=>p.map(c=>c.id===co.id?{...c,teams:c.teams.map(tm=>tm.id===t.id?{...tm,people:+e.target.value}:tm)}:c))})),
-            ce("div",null,ce("label",{style:S.lbl},"Dias/Ambiente"),ce("input",{style:S.inp,type:"number",min:"1",value:t.daysPerUnit||3,onChange:e=>setCompanies(p=>p.map(c=>c.id===co.id?{...c,teams:c.teams.map(tm=>tm.id===t.id?{...tm,daysPerUnit:+e.target.value}:tm)}:c))}))
-          ),
-          ce("div",{style:{marginTop:8}},
-            ce("label",{style:S.lbl},"Andares Atribuídos"),
-            ce("div",{style:{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}},
-              FLOORS.map(f=>ce("button",{key:f,onClick:()=>{const cur=t.assignedFloors||[];const nf=cur.includes(f)?cur.filter(x=>x!==f):[...cur,f].sort((a,b)=>a-b);setCompanies(p=>p.map(c=>c.id===co.id?{...c,teams:c.teams.map(tm=>tm.id===t.id?{...tm,assignedFloors:nf}:tm)}:c));},style:{padding:"3px 9px",borderRadius:5,border:"none",fontSize:11,fontWeight:700,background:(t.assignedFloors||[]).includes(f)?co.color:"#E8E5DF",color:(t.assignedFloors||[]).includes(f)?"#fff":"#8C8980"}},f+"°"))
-            )
-          )
-        ))
-      ))
     )
   );
 }
 
 // ══════════ MAIN APP ══════════
 function App(){
-  const [view,setView]=useState("dashboard");
-  const [groups,setGroups]=useState(INIT_GROUPS);
-  const [companies,setCompanies]=useState(INIT_COMPANIES);
-  const [schedules,setSchedules]=useState(()=>{const s={};INIT_GROUPS.forEach(g=>{s[g.id]=genSched();});return s;});
+  const [selectedGroup,setSelectedGroup]=useState(null);
+  const [groupTab,setGroupTab]=useState("dashboard");
+  const [groups,setGroups]=useState(IG);
+  const [companies,setCompanies]=useState(IC);
+  const [schedules,setSchedules]=useState(()=>{const s={};IG.forEach(g=>{s[g.id]=gS();});return s;});
   const [updates,setUpdates]=useState({});
   const [aiInsights,setAiInsights]=useState({});
-  const [currentGroupId,setCurrentGroupId]=useState(INIT_GROUPS[0].id);
   const [isLoadingAI,setIsLoadingAI]=useState(false);
   const [connected,setConnected]=useState(false);
   const [toast,setToast]=useState(null);
@@ -776,12 +576,12 @@ function App(){
   useEffect(()=>{
     REF.on("value",snap=>{
       const d=snap.val();
-      if(!d){const init={groups:INIT_GROUPS,companies:INIT_COMPANIES,schedules:{},updates:{},aiInsights:{}};INIT_GROUPS.forEach(g=>{init.schedules[g.id]=genSched();});REF.set(init);}
+      if(!d){const init={groups:IG,companies:IC,schedules:{},updates:{},aiInsights:{}};IG.forEach(g=>{init.schedules[g.id]=gS();});REF.set(init);}
       else{
         if(d.groups)setGroups(Array.isArray(d.groups)?d.groups:Object.values(d.groups));
         if(d.companies)setCompanies(Array.isArray(d.companies)?d.companies:Object.values(d.companies));
         if(d.schedules)setSchedules(d.schedules);
-        if(d.updates){const upd={};Object.entries(d.updates).forEach(([gid,vals])=>{upd[gid]=Object.values(vals||{}).sort((a,b)=>(a.date||"")>(b.date||"")?1:-1);});setUpdates(upd);}
+        if(d.updates){const u={};Object.entries(d.updates).forEach(([gid,vals])=>{u[gid]=Object.values(vals||{}).sort((a,b)=>(a.date||"")>(b.date||"")?1:-1);});setUpdates(u);}
         if(d.aiInsights){const ai={};Object.entries(d.aiInsights).forEach(([gid,val])=>{ai[gid]=typeof val==="string"?val:"";});setAiInsights(ai);}
       }
       setConnected(true);
@@ -792,66 +592,34 @@ function App(){
   },[]);
 
   const showToast=useCallback(msg=>{setToast(msg);setTimeout(()=>setToast(null),3500);},[]);
-  const onSave=useCallback(async(g,c,sc)=>{await Promise.all([REF.child("groups").set(g),REF.child("companies").set(c),REF.child("schedules").set(sc)]);},[]);
-  const onPushUpdate=useCallback(async(groupId,update)=>{await REF.child("updates").child(groupId).push(update);},[]);
+  const saveAll=useCallback(async()=>{await Promise.all([REF.child("groups").set(groups),REF.child("companies").set(companies),REF.child("schedules").set(schedules)]);},[groups,companies,schedules]);
+  const onPushUpdate=useCallback(async(gid,update)=>{await REF.child("updates").child(gid).push(update);},[]);
+  const refresh=()=>{REF.once("value",()=>{});showToast("🔄 Dados atualizados!");};
+  const addGroup=()=>{const name=window.prompt("Nome do novo grupo de serviço:");if(!name?.trim())return;const id=`g${Date.now()}`;const newG={id,name:name.trim(),color:"#9BB5C8",envName:"Ambiente"};setGroups(p=>[...p,newG]);setSchedules(p=>({...p,[id]:gS()}));showToast("✅ Grupo '"+name.trim()+"' criado!");};
+  const remGroup=id=>{if(!window.confirm("Remover este grupo?"))return;setGroups(p=>p.filter(g=>g.id!==id));if(selectedGroup===id)setSelectedGroup(null);};
+  const updGroupField=(id,f,v)=>setGroups(p=>p.map(g=>g.id===id?{...g,[f]:v}:g));
 
-  const onRunAI=useCallback(async(groupId)=>{
+  const onRunAI=useCallback(async(gid)=>{
     setIsLoadingAI(true);
-    const grp=groups.find(g=>g.id===groupId);
-    const sched=schedules[groupId]||{};
-    const grpUpd=updates[groupId]||[];
-    const progress=computeProgress(updates,schedules,groupId);
+    const grp=groups.find(g=>g.id===gid);
+    const sched=schedules[gid]||{};
+    const grpUpd=updates[gid]||[];
+    const progress=computeProgress(updates,schedules,gid);
     const totalGap=grpUpd.filter(u=>!u.hitTarget).reduce((s,u)=>s+((u.targetPct||0)-(u.actualPct||0)),0);
     const causeStats={};grpUpd.filter(u=>!u.hitTarget&&u.cause).forEach(u=>{causeStats[u.cause]=(causeStats[u.cause]||0)+1;});
     const topCauses=Object.entries(causeStats).sort((a,b)=>b[1]-a[1]).slice(0,3);
     const allTeams=companies.flatMap(co=>co.teams.map(t=>({...t,coName:co.name})));
-    const teamSummary=allTeams.map(t=>`${t.coName} ${t.name}: ${t.people} pessoas, ${t.daysPerUnit} dias/ambiente, andares: [${(t.assignedFloors||[]).join(",")}]`).join("\n");
-    const prompt=`Você é consultor sênior de gestão de obras hoteleiras de alto padrão.
-
-OBRA: Hotel Sofitel RJ | GRUPO: ${grp?.name} | DATA: ${TODAY}
-TIPO DE AMBIENTE: ${grp?.envName} | ANDARES: 5° ao 20°
-
-EQUIPES:
-${teamSummary}
-
-PROGRESSO POR ANDAR:
-${FLOORS.map(f=>{
-  const s=progress.floorStats[f];
-  const teams=getFloorTeams(companies,f);
-  const cap=calcFloorDailyCapacity(teams,s.roomCount);
-  return `• ${f}°: real ${s.actualPct.toFixed(0)}% vs plan ${s.plannedPct.toFixed(0)}% (var ${s.variance>0?"+":""}${s.variance.toFixed(0)}%) | ${s.doneRooms}/${s.roomCount} quartos | capacidade ${cap.cap} amb/dia`;
-}).join("\n")}
-
-ATRASO ACUMULADO: ${totalGap}% total
-PRINCIPAIS CAUSAS: ${topCauses.map(([c,n])=>`${c} (${n}x)`).join(", ")||"Nenhuma"}
-
-ÚLTIMOS 10 REGISTROS:
-${grpUpd.slice(-10).map(u=>`${u.date}|${u.floor}°|Q${u.room}|${u.environment||"?"}|Meta:${u.targetPct}%|Real:${u.actualPct}%|${u.hitTarget?"✓":"✗"}${u.cause?"|"+u.cause:""}`).join("\n")||"Nenhum"}
-
-Forneça análise executiva:
-1. 🔴🟡🟢 STATUS GERAL (2-3 frases)
-2. ⚠️ ALERTAS — andares e quartos críticos
-3. 📈 TENDÊNCIA — nova data de conclusão vs prazo original com os atrasos atuais
-4. ✅ AÇÕES IMEDIATAS — o que fazer hoje/amanhã
-5. 🔄 RECOMENDAÇÃO ESPECÍFICA — para recuperar ${totalGap}% de atraso: (a) adicionar pessoas → calcule quantas e onde, (b) estender jornada → calcule horas extras necessárias. Mostre impacto de cada opção em dias.
-6. 🎯 META DIÁRIA — % mínimo por ambiente por equipe para terminar no prazo
-
-Direto, executivo, em português. Para o CEO.`;
-    try{
-      const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
-      const data=await res.json();
-      const text=data.content?.find(b=>b.type==="text")?.text||data.error||"Erro.";
-      setAiInsights(p=>({...p,[groupId]:text}));
-      await REF.child("aiInsights").child(groupId).set(text);
-    }catch(e){setAiInsights(p=>({...p,[groupId]:"⚠ Erro ao conectar com a IA."}));}
+    const prompt=`Consultor sênior de obras hoteleiras de alto padrão.\n\nOBRA: Sofitel RJ | GRUPO: ${grp?.name} | DATA: ${TODAY}\n\nEQUIPES:\n${allTeams.map(t=>`${t.coName} ${t.name}: ${t.people}p, ${t.dpu}d/amb, andares:[${(t.assignedFloors||[]).join(",")}]`).join("\n")}\n\nPROGRESSO:\n${FLOORS.map(f=>{const s=progress.floorStats[f];return `${f}°: real ${s.actualPct.toFixed(0)}% plan ${s.plannedPct.toFixed(0)}% var ${s.variance>0?"+":""}${s.variance.toFixed(0)}% | ${s.doneRooms}/${s.roomCount} completos`;}).join("\n")}\n\nATRASO: ${totalGap}% total\nCAUSAS: ${topCauses.map(([c,n])=>`${c}(${n}x)`).join(", ")||"Nenhuma"}\n\nÚLTIMOS:\n${grpUpd.slice(-10).map(u=>`${u.date}|${u.floor}°|Q${u.room}|${u.environment||"?"}|meta:${u.targetPct}%|real:${u.actualPct}%|${u.hitTarget?"✓":"✗"}${u.cause?"|"+u.cause:""}`).join("\n")||"Nenhum"}\n\nForneça:\n1.🔴🟡🟢 STATUS GERAL\n2.⚠️ ALERTAS críticos\n3.📈 TENDÊNCIA — nova data vs prazo\n4.✅ AÇÕES IMEDIATAS\n5.🔄 PARA RECUPERAR ${totalGap}%: (a) adicionar pessoas (quantas, onde) (b) estender horas (quantas) — impacto em dias de cada opção\n6.🎯 META DIÁRIA por equipe\nDireto, executivo, português, para o CEO.`;
+    try{const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});const data=await res.json();const text=data.content?.find(b=>b.type==="text")?.text||data.error||"Erro.";setAiInsights(p=>({...p,[gid]:text}));await REF.child("aiInsights").child(gid).set(text);}catch(e){setAiInsights(p=>({...p,[gid]:"⚠ Erro ao conectar com a IA."}));}
     setIsLoadingAI(false);
   },[groups,schedules,updates,companies]);
 
-  const curGrp=groups.find(g=>g.id===currentGroupId);
-  const NAV=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"config",icon:"⚙",label:"Configurações"},{id:"update",icon:"◎",label:"Atualização"},{id:"analysis",icon:"✦",label:"Análise IA"}];
+  const curGrp=groups.find(g=>g.id===selectedGroup);
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"update",label:"Atualização"},{id:"schedule",label:"Cronograma"},{id:"teams",label:"Equipes"},{id:"analysis",label:"Análise IA"}];
 
   return ce("div",{style:{display:"flex",height:"100vh",overflow:"hidden",fontFamily:"'DM Sans',system-ui,sans-serif",background:"#F5F4F1"}},
-    ce("nav",{style:{width:210,background:"#fff",display:"flex",flexDirection:"column",flexShrink:0,borderRight:"1px solid #EDEBE6"}},
+    // Sidebar
+    ce("nav",{style:{width:215,background:"#fff",display:"flex",flexDirection:"column",flexShrink:0,borderRight:"1px solid #EDEBE6"}},
       ce("div",{style:{padding:"18px 16px 14px",borderBottom:"1px solid #EDEBE6"}},
         ce("div",{style:{fontWeight:700,fontSize:10,letterSpacing:"2.5px",color:"#1C1B18"}},"SOFITEL RJ"),
         ce("div",{style:{fontSize:10,color:"#B8B5AD",marginTop:3,display:"flex",alignItems:"center"}},
@@ -860,34 +628,68 @@ Direto, executivo, em português. Para o CEO.`;
         )
       ),
       ce("div",{style:{flex:1,overflow:"auto"}},
-        ce("div",{style:{padding:"14px 0 4px"}},
-          ce("div",{style:{fontSize:9,fontWeight:700,color:"#C4C1BA",letterSpacing:"1.2px",textTransform:"uppercase",padding:"0 16px",marginBottom:4}},"Ferramentas"),
-          NAV.map(n=>ce("div",{key:n.id,onClick:()=>setView(n.id),style:{display:"flex",alignItems:"center",gap:9,padding:"9px 16px",cursor:"pointer",borderLeft:view===n.id?"2px solid "+(curGrp?.color||"#9BB5C8"):"2px solid transparent",background:view===n.id?"#F5F4F1":"transparent",color:view===n.id?"#1C1B18":"#8C8980",fontSize:12,fontWeight:view===n.id?700:500,marginBottom:2}},
-            ce("span",{style:{fontSize:13}},n.icon)," ",n.label
-          ))
+        // Overview
+        ce("div",{style:{padding:"12px 0 4px"}},
+          ce("div",{onClick:()=>{setSelectedGroup(null);},style:{display:"flex",alignItems:"center",gap:9,padding:"9px 16px",cursor:"pointer",borderLeft:!selectedGroup?"2px solid #9BB5C8":"2px solid transparent",background:!selectedGroup?"#F5F4F1":"transparent",color:!selectedGroup?"#1C1B18":"#8C8980",fontSize:12,fontWeight:!selectedGroup?700:500,marginBottom:4}},"◈  Visão Geral")
         ),
-        ce("div",{style:{padding:"14px 0 4px",borderTop:"1px solid #F5F4F1"}},
+        // Groups
+        ce("div",{style:{padding:"4px 0"}},
           ce("div",{style:{fontSize:9,fontWeight:700,color:"#C4C1BA",letterSpacing:"1.2px",textTransform:"uppercase",padding:"0 16px",marginBottom:4}},"Grupos de Serviço"),
-          groups.map(g=>ce("div",{key:g.id,onClick:()=>{setCurrentGroupId(g.id);setView("dashboard");},style:{display:"flex",alignItems:"center",gap:9,padding:"9px 16px",cursor:"pointer",borderLeft:currentGroupId===g.id&&view==="dashboard"?"2px solid "+g.color:"2px solid transparent",background:currentGroupId===g.id&&view==="dashboard"?"#F5F4F1":"transparent",color:currentGroupId===g.id&&view==="dashboard"?"#1C1B18":"#8C8980",fontSize:12,fontWeight:currentGroupId===g.id&&view==="dashboard"?700:500,marginBottom:2}},
-            ce("div",{style:{width:8,height:8,borderRadius:"50%",background:g.color,flexShrink:0}}),
-            ce("span",{style:{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},g.name)
-          ))
+          groups.map(g=>ce("div",{key:g.id,style:{display:"flex",alignItems:"center",padding:"8px 16px",cursor:"pointer",borderLeft:selectedGroup===g.id?"2px solid "+g.color:"2px solid transparent",background:selectedGroup===g.id?"#F5F4F1":"transparent",marginBottom:2}},
+            ce("div",{onClick:()=>{setSelectedGroup(g.id);setGroupTab("dashboard");},style:{display:"flex",alignItems:"center",gap:9,flex:1}},
+              ce("div",{style:{width:8,height:8,borderRadius:"50%",background:g.color,flexShrink:0}}),
+              ce("span",{style:{fontSize:12,fontWeight:selectedGroup===g.id?700:500,color:selectedGroup===g.id?"#1C1B18":"#8C8980",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},g.name)
+            )
+          )),
+          ce("div",{style:{padding:"8px 16px"}},
+            ce("button",{onClick:addGroup,style:S.btnAdd},"+ Novo Grupo")
+          )
         )
       ),
-      ce("div",{style:{padding:"12px 16px",borderTop:"1px solid #EDEBE6"}},
-        ce("div",{style:{fontSize:9,color:"#C4C1BA",textTransform:"uppercase",letterSpacing:"1px",marginBottom:2}},"Grupo atual"),
-        ce("div",{style:{fontSize:12,fontWeight:700,color:curGrp?.color||"#9BB5C8"}},curGrp?.name||"—"),
-        ce("div",{style:{fontSize:10,color:"#B8B5AD"}},curGrp?.envName||"—")
+      // Footer
+      ce("div",{style:{padding:"12px 16px",borderTop:"1px solid #EDEBE6",display:"flex",flexDirection:"column",gap:6}},
+        ce("button",{onClick:refresh,style:{...S.btnS,fontSize:11,padding:"7px 12px",display:"flex",alignItems:"center",gap:6,justifyContent:"center"}},"🔄 Atualizar dados"),
+        curGrp&&ce("div",{style:{fontSize:9,color:curGrp.color,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginTop:2}},curGrp.name)
       )
     ),
+    // Main
     ce("main",{style:{flex:1,overflow:"auto",padding:24,background:"#F5F4F1"}},
       !connected&&ce("div",{style:{background:"#FBF0F0",border:"1px solid #E8C4C4",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#C48282",fontWeight:600}},"🔴 Sem conexão com Firebase"),
-      view==="dashboard"&&ce(DashboardView,{groups,currentGroupId,setCurrentGroupId,updates,schedules,companies,setView,aiInsights}),
-      view==="config"&&ce(ConfigView,{groups,setGroups,companies,setCompanies,schedules,setSchedules,onSave,showToast}),
-      view==="update"&&ce(UpdateView,{groups,currentGroupId,setCurrentGroupId,updates,onPushUpdate,companies,schedules,showToast}),
-      view==="analysis"&&ce(AnalysisView,{groups,currentGroupId,companies,schedules,updates,aiInsights,isLoadingAI,onRunAI})
-    ),
-    toast&&ce("div",{style:{position:"fixed",bottom:20,right:20,padding:"11px 20px",borderRadius:9,background:"#1C1B18",color:"#fff",fontSize:12,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,.15)",zIndex:9999,borderLeft:"3px solid #A8C4B0"}},toast)
+
+      // Group view
+      selectedGroup&&curGrp?ce("div",null,
+        // Header with back + tabs
+        ce("div",{style:{marginBottom:20}},
+          ce("button",{onClick:()=>setSelectedGroup(null),style:{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,border:"1px solid #EDEBE6",background:"#fff",fontSize:12,fontWeight:600,color:"#6C6960",marginBottom:12}},"← Todos os grupos"),
+          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+            ce("div",{style:{display:"flex",alignItems:"center",gap:10}},
+              ce("div",{style:{width:12,height:12,borderRadius:"50%",background:curGrp.color}}),
+              ce("div",{style:{fontSize:20,fontWeight:700,color:"#1C1B18"}},curGrp.name)
+            ),
+            ce("div",{style:{display:"flex",gap:8}},
+              // Edit group inline
+              ce("input",{style:{...S.inp,width:120,padding:"5px 8px",fontSize:11},value:curGrp.envName,onChange:e=>updGroupField(curGrp.id,"envName",e.target.value),placeholder:"Tipo de ambiente"}),
+              ce("input",{type:"color",value:curGrp.color,onChange:e=>updGroupField(curGrp.id,"color",e.target.value),style:{width:32,height:32,borderRadius:6,border:"1px solid #E8E5DF",cursor:"pointer",padding:1,background:"transparent"}}),
+              ce("button",{onClick:()=>remGroup(curGrp.id),style:S.btnD},"✕ Remover grupo"),
+              ce("button",{onClick:saveAll,style:S.btnP},"💾 Salvar tudo")
+            )
+          ),
+          // Tabs
+          ce("div",{style:{display:"flex",borderBottom:"1px solid #EDEBE6",marginTop:16}},
+            TABS.map(t=>ce("button",{key:t.id,onClick:()=>setGroupTab(t.id),style:{padding:"9px 18px",border:"none",background:"transparent",fontSize:12,fontWeight:700,color:groupTab===t.id?"#1C1B18":"#B8B5AD",borderBottom:groupTab===t.id?`2px solid ${curGrp.color}`:"2px solid transparent",marginBottom:-1,cursor:"pointer"}},t.label))
+          )
+        ),
+        groupTab==="dashboard"&&ce(GroupDashboard,{grp:curGrp,updates,schedules,companies,setTab:setGroupTab}),
+        groupTab==="update"&&ce(GroupUpdate,{grp:curGrp,updates,onPushUpdate,companies,schedules,showToast}),
+        groupTab==="schedule"&&ce(GroupSchedule,{grp:curGrp,schedules,setSchedules,onSave:saveAll,showToast}),
+        groupTab==="teams"&&ce(GroupTeams,{grp:curGrp,companies,setCompanies,onSave:saveAll,showToast}),
+        groupTab==="analysis"&&ce(GroupAnalysis,{grp:curGrp,companies,schedules,updates,aiInsights,isLoadingAI,onRunAI})
+      )
+      // Overview
+      :ce(Overview,{groups,updates,schedules,setSelectedGroup}),
+
+      toast&&ce("div",{style:{position:"fixed",bottom:20,right:20,padding:"11px 20px",borderRadius:9,background:"#1C1B18",color:"#fff",fontSize:12,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,.15)",zIndex:9999,borderLeft:"3px solid #A8C4B0"}},toast)
+    )
   );
 }
 
