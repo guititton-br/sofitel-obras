@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sofitel RJ · Gestão de Pedras</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #root { height: 100%; }
+    body { background: #080f18; font-family: 'DM Sans', system-ui, sans-serif; color: #f1f5f9; }
+    input, select, button, textarea { font-family: 'DM Sans', system-ui, sans-serif; }
+    h1, h2 { font-family: 'Sora', system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #080f18; }
+    ::-webkit-scrollbar-thumb { background: #1e2d3d; border-radius: 3px; }
+    input:focus, select:focus { outline: none; border-color: #0ea5e9 !important; box-shadow: 0 0 0 3px rgba(14,165,233,0.15); }
+    button { cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    button:hover { opacity: 0.88; }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    #splash {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; background: #080f18; z-index: 9999;
+      transition: opacity 0.4s;
+    }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .online-dot { width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;margin-right:6px;animation:pulse 2s infinite; }
+    .offline-dot { width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;margin-right:6px; }
+  </style>
+</head>
+<body>
+  <div id="splash">
+    <div style="font-size:52px;margin-bottom:20px">🏛️</div>
+    <div style="font-family:'Sora',sans-serif;font-weight:900;font-size:16px;letter-spacing:3px;color:#f1f5f9">SOFITEL RJ</div>
+    <div style="color:#334155;margin-top:8px;font-size:13px" class="pulse">Conectando ao banco de dados...</div>
+  </div>
+  <div id="root"></div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║              ⚙️  CONFIGURAÇÃO  —  EDITE AQUI                    ║
+// ║  1. Crie um projeto em https://console.firebase.google.com      ║
+// ║  2. Adicione um Realtime Database ao projeto                    ║
+// ║  3. Copie as credenciais abaixo                                 ║
+// ╚══════════════════════════════════════════════════════════════════╝
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAAO_16h-74TpZpMwszCwd5yO2cMmkcQNY",
+  authDomain:        "sofitel-954c1.firebaseapp.com",
+  databaseURL:       "https://sofitel-954c1-default-rtdb.firebaseio.com",
+  projectId:         "sofitel-954c1",
+  storageBucket:     "sofitel-954c1.firebasestorage.app",
+  messagingSenderId: "882525727807",
+  appId:             "1:882525727807:web:210a7e6f2639b613f85c8a",
+};
+// ══════════════════════════════════════════════════════════════════
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+const REF = db.ref("sofitel");
+
+// ── React & Recharts ──
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+        ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell } = Recharts;
+
+// ── Constants ──
+const FLOORS = Array.from({ length: 16 }, (_, i) => i + 5);
+const ACTIVITIES = ["Piso", "Parede", "Bancada"];
+const DELAY_CAUSES = [
+  "Falta de material",
+  "Ausência de mão de obra",
+  "Impacto de outro fornecedor",
+  "Problema técnico / retrabalho",
+  "Acesso / logística"
+];
+
+const fmt   = d => new Date(d).toISOString().split("T")[0];
+const addD  = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const diffD = (a, b) => Math.floor((new Date(b) - new Date(a)) / 86400000);
+const TODAY = fmt(new Date());
+
+const INIT_COMPANIES = [
+  { id:"c1", name:"Dimarmore", color:"#38BDF8", teams:[{ id:"t1", name:"Equipe A", people:3, productivity:4, assignedFloors:[5,6,7,8] }] },
+  { id:"c2", name:"Citrino",   color:"#34D399", teams:[{ id:"t2", name:"Equipe A", people:2, productivity:7, assignedFloors:[9,10,11,12] }] },
+  { id:"c3", name:"Tramonto",  color:"#FBBF24", teams:[{ id:"t3", name:"Equipe A", people:4, productivity:5, assignedFloors:[13,14,15,16] }] },
+  { id:"c4", name:"Grannobre", color:"#A78BFA", teams:[{ id:"t4", name:"Equipe A", people:3, productivity:6, assignedFloors:[17,18,19,20] }] },
+];
+const genSchedule = () => {
+  const s = {}, base = new Date();
+  FLOORS.forEach((f, i) => { s[f] = { startDate: fmt(addD(base, i*7)), endDate: fmt(addD(base, i*7+90)), roomCount: 10 }; });
+  return s;
+};
+
+// ── Styles ──
+const S = {
+  card:   { background:"#0f1923", borderRadius:12, padding:"18px 22px", border:"1px solid #1e2d3d" },
+  h2:     { fontSize:13, fontWeight:700, margin:"0 0 16px 0", color:"#e2e8f0" },
+  h3:     { fontSize:10, fontWeight:700, margin:"0 0 10px 0", color:"#94a3b8", textTransform:"uppercase", letterSpacing:"1px" },
+  label:  { display:"block", fontSize:10, fontWeight:700, color:"#64748b", marginBottom:4, textTransform:"uppercase", letterSpacing:"0.8px" },
+  input:  { width:"100%", padding:"8px 10px", borderRadius:7, border:"1px solid #2d3f55", fontSize:12, background:"#080f18", color:"#e2e8f0", boxSizing:"border-box" },
+  btnP:   { padding:"9px 18px", borderRadius:8, border:"none", fontSize:12, fontWeight:700, background:"#0ea5e9", color:"#fff" },
+  btnS:   { padding:"9px 14px", borderRadius:8, border:"none", fontSize:12, fontWeight:600, background:"#1e2d3d", color:"#94a3b8" },
+  btnD:   { padding:"5px 10px", borderRadius:7, border:"none", fontSize:11, fontWeight:700, background:"rgba(239,68,68,0.15)", color:"#ef4444" },
+  badge:  c => ({ display:"inline-flex", alignItems:"center", padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:700, background:c+"33", color:c }),
+  grid2:  { display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 },
+  grid3:  { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 },
+  grid4:  { display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 },
+};
+
+// ── Tooltip personalizado ──
+function ChartTip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return React.createElement("div", { style:{ background:"#0b1220", border:"1px solid #243044", borderRadius:8, padding:"10px 14px", fontSize:11 } },
+    React.createElement("div", { style:{ fontWeight:700, color:"#64748b", marginBottom:6 } }, label),
+    payload.map(p => React.createElement("div", { key:p.name, style:{ display:"flex", gap:8, alignItems:"center", marginBottom:2, color:"#cbd5e1" } },
+      React.createElement("div", { style:{ width:7, height:7, borderRadius:"50%", background:p.color } }),
+      React.createElement("span", null, p.name === "planned" ? "Planejado" : p.name === "actual" ? "Realizado" : "Tendência"),
+      React.createElement("span", { style:{ fontWeight:700, color:"#f1f5f9" } }, p.value)
+    ))
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CONFIG VIEW
+// ══════════════════════════════════════════════════════════════════════
+function ConfigView({ companies, schedule, onSaveCompanies, onSaveSchedule, showToast }) {
+  const [tab, setTab]         = useState("companies");
+  const [lCo, setLCo]         = useState(companies);
+  const [lSc, setLSc]         = useState(schedule);
+  const [editCo, setEditCo]   = useState(null);
+  const [newCo, setNewCo]     = useState({ name:"", color:"#38BDF8" });
+  const [newTeam, setNewTeam] = useState({ name:"Equipe B", people:3, productivity:5, assignedFloors:[] });
+  const [saving, setSaving]   = useState(false);
+  const editing = useRef(false);
+
+  useEffect(() => { if (!editing.current) { setLCo(companies); setLSc(schedule); } }, [companies, schedule]);
+
+  const save = async () => {
+    setSaving(true);
+    await Promise.all([onSaveCompanies(lCo), onSaveSchedule(lSc)]);
+    setSaving(false);
+    editing.current = false;
+    showToast("✅ Configurações salvas e sincronizadas!");
+  };
+
+  const mut = fn => { editing.current = true; fn(); };
+
+  const addCo  = () => { if (!newCo.name.trim()) return; mut(() => setLCo(p => [...p, { id:`c${Date.now()}`, ...newCo, teams:[] }])); setNewCo({ name:"", color:"#38BDF8" }); };
+  const remCo  = id => mut(() => setLCo(p => p.filter(c => c.id !== id)));
+  const addT   = coId => {
+    if (!newTeam.name.trim()) return;
+    mut(() => setLCo(p => p.map(c => c.id===coId ? {...c, teams:[...c.teams, {id:`t${Date.now()}`, ...newTeam}]} : c)));
+    setNewTeam({ name:"Equipe B", people:3, productivity:5, assignedFloors:[] }); setEditCo(null);
+  };
+  const remT   = (coId, tId) => mut(() => setLCo(p => p.map(c => c.id===coId ? {...c, teams:c.teams.filter(t=>t.id!==tId)} : c)));
+  const updT   = (coId, tId, f, v) => mut(() => setLCo(p => p.map(c => c.id===coId ? {...c, teams:c.teams.map(t => t.id===tId ? {...t,[f]:v} : t)} : c)));
+  const togFlr = (coId, tId, fl) => {
+    const team = lCo.find(c=>c.id===coId)?.teams.find(t=>t.id===tId);
+    const cur  = team?.assignedFloors || [];
+    updT(coId, tId, "assignedFloors", cur.includes(fl) ? cur.filter(f=>f!==fl) : [...cur, fl].sort((a,b)=>a-b));
+  };
+  const updSc  = (fl, field, val) => mut(() => setLSc(p => ({...p, [fl]: {...p[fl], [field]: field==="roomCount"?+val:val}})));
+
+  const tStyle = id => ({ padding:"9px 18px", border:"none", background:"transparent", fontSize:12, fontWeight:700, color:tab===id?"#0ea5e9":"#64748b", borderBottom:tab===id?"2px solid #0ea5e9":"2px solid transparent", marginBottom:-2, cursor:"pointer" });
+
+  return React.createElement("div", null,
+    React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 } },
+      React.createElement("div", { style:{ fontSize:18, fontWeight:800, color:"#f1f5f9" } }, "Configurações"),
+      React.createElement("button", { style:{...S.btnP, background: saving?"#0369a1":"#0ea5e9"}, onClick:save, disabled:saving },
+        saving ? "⏳ Salvando..." : "💾 Salvar Configurações"
+      )
+    ),
+    React.createElement("p", { style:{ fontSize:11, color:"#475569", marginBottom:18 } }, "Alterações ficam em rascunho até você clicar em Salvar."),
+    React.createElement("div", { style:{ display:"flex", borderBottom:"1px solid #1e2d3d", marginBottom:22 } },
+      ["companies","schedule"].map(id => React.createElement("button", { key:id, style:tStyle(id), onClick:()=>setTab(id) },
+        id==="companies" ? "🏢 Empresas & Equipes" : "📅 Cronograma Base"
+      ))
+    ),
+
+    tab==="companies" && React.createElement("div", null,
+      React.createElement("div", { style:{...S.card, marginBottom:14} },
+        React.createElement("p", { style:S.h3 }, "Nova Empresa"),
+        React.createElement("div", { style:{ display:"flex", gap:10, alignItems:"flex-end" } },
+          React.createElement("div", { style:{ flex:1 } },
+            React.createElement("label", { style:S.label }, "Nome"),
+            React.createElement("input", { style:S.input, placeholder:"Nome da empresa", value:newCo.name, onChange:e=>setNewCo(p=>({...p,name:e.target.value})), onKeyDown:e=>e.key==="Enter"&&addCo() })
+          ),
+          React.createElement("div", null,
+            React.createElement("label", { style:S.label }, "Cor"),
+            React.createElement("input", { type:"color", value:newCo.color, onChange:e=>setNewCo(p=>({...p,color:e.target.value})), style:{ width:42, height:36, borderRadius:7, border:"1px solid #2d3f55", cursor:"pointer", padding:2, background:"transparent" } })
+          ),
+          React.createElement("button", { style:S.btnP, onClick:addCo }, "Adicionar")
+        )
+      ),
+      lCo.map(co => React.createElement("div", { key:co.id, style:{...S.card, marginBottom:12} },
+        React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 } },
+          React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:10 } },
+            React.createElement("div", { style:{ width:12, height:12, borderRadius:"50%", background:co.color } }),
+            React.createElement("span", { style:{ fontWeight:800, fontSize:14, color:"#f1f5f9" } }, co.name),
+            React.createElement("span", { style:S.badge("#64748b") }, co.teams.length+" eq.")
+          ),
+          React.createElement("button", { style:S.btnD, onClick:()=>remCo(co.id) }, "Remover empresa")
+        ),
+        co.teams.map(team => React.createElement("div", { key:team.id, style:{ background:"#080f18", borderRadius:9, padding:12, marginBottom:10, border:"1px solid #1e2d3d" } },
+          React.createElement("div", { style:{...S.grid3, marginBottom:10} },
+            React.createElement("div", null, React.createElement("label", { style:S.label }, "Nome da Equipe"), React.createElement("input", { style:S.input, value:team.name, onChange:e=>updT(co.id,team.id,"name",e.target.value) })),
+            React.createElement("div", null, React.createElement("label", { style:S.label }, "Nº Pessoas"),     React.createElement("input", { style:S.input, type:"number", min:"1", value:team.people, onChange:e=>updT(co.id,team.id,"people",+e.target.value) })),
+            React.createElement("div", null, React.createElement("label", { style:S.label }, "Dias/Banheiro"),  React.createElement("input", { style:S.input, type:"number", min:"1", value:team.productivity, onChange:e=>updT(co.id,team.id,"productivity",+e.target.value) }))
+          ),
+          React.createElement("div", { style:{ marginBottom:8 } },
+            React.createElement("label", { style:S.label }, "Andares Atribuídos"),
+            React.createElement("div", { style:{ display:"flex", flexWrap:"wrap", gap:4 } },
+              FLOORS.map(f => React.createElement("button", { key:f, onClick:()=>togFlr(co.id,team.id,f), style:{ padding:"3px 9px", borderRadius:5, border:"none", fontSize:11, fontWeight:700, background:team.assignedFloors.includes(f)?co.color:"#1e2d3d", color:team.assignedFloors.includes(f)?"#080f18":"#64748b" } }, f+"°"))
+            )
+          ),
+          React.createElement("div", { style:{ fontSize:11, color:"#475569", marginBottom:8 } }, "Meta diária: "+(1/team.productivity).toFixed(2)+" banh/dia · "+team.people+" pessoas"),
+          React.createElement("button", { style:S.btnD, onClick:()=>remT(co.id,team.id) }, "✕ Remover equipe")
+        )),
+        editCo===co.id
+          ? React.createElement("div", { style:{ background:"rgba(14,165,233,0.06)", borderRadius:9, padding:12, border:"1px solid rgba(14,165,233,0.2)" } },
+              React.createElement("p", { style:{...S.h3, color:"#38bdf8"} }, "Nova Equipe"),
+              React.createElement("div", { style:{...S.grid3, marginBottom:10} },
+                React.createElement("div", null, React.createElement("label", { style:S.label }, "Nome"),         React.createElement("input", { style:S.input, placeholder:"Equipe B", value:newTeam.name, onChange:e=>setNewTeam(p=>({...p,name:e.target.value})) })),
+                React.createElement("div", null, React.createElement("label", { style:S.label }, "Nº Pessoas"),   React.createElement("input", { style:S.input, type:"number", min:"1", value:newTeam.people, onChange:e=>setNewTeam(p=>({...p,people:+e.target.value})) })),
+                React.createElement("div", null, React.createElement("label", { style:S.label }, "Dias/Banheiro"),React.createElement("input", { style:S.input, type:"number", min:"1", value:newTeam.productivity, onChange:e=>setNewTeam(p=>({...p,productivity:+e.target.value})) }))
+              ),
+              React.createElement("div", { style:{ display:"flex", gap:8 } },
+                React.createElement("button", { style:S.btnP, onClick:()=>addT(co.id) }, "Salvar"),
+                React.createElement("button", { style:S.btnS, onClick:()=>setEditCo(null) }, "Cancelar")
+              )
+            )
+          : React.createElement("button", { style:S.btnS, onClick:()=>setEditCo(co.id) }, "+ Nova Equipe")
+      ))
+    ),
+
+    tab==="schedule" && React.createElement("div", { style:S.grid2 },
+      FLOORS.map(fl => {
+        const sc = lSc[fl]||{};
+        const co = lCo.find(c=>c.teams.some(t=>t.assignedFloors.includes(fl)));
+        return React.createElement("div", { key:fl, style:S.card },
+          React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 } },
+            React.createElement("span", { style:{ fontWeight:800, fontSize:13, color:"#f1f5f9" } }, fl+"° Pavimento"),
+            co && React.createElement("span", { style:S.badge(co.color) }, co.name)
+          ),
+          React.createElement("div", { style:S.grid3 },
+            React.createElement("div", null, React.createElement("label", { style:S.label }, "Início"),    React.createElement("input", { style:S.input, type:"date", value:sc.startDate||"",   onChange:e=>updSc(fl,"startDate",e.target.value) })),
+            React.createElement("div", null, React.createElement("label", { style:S.label }, "Término"),   React.createElement("input", { style:S.input, type:"date", value:sc.endDate||"",     onChange:e=>updSc(fl,"endDate",e.target.value) })),
+            React.createElement("div", null, React.createElement("label", { style:S.label }, "Banheiros"), React.createElement("input", { style:S.input, type:"number", min:"1", value:sc.roomCount||10, onChange:e=>updSc(fl,"roomCount",e.target.value) }))
+          )
+        );
+      })
+    )
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// UPDATE VIEW
+// ══════════════════════════════════════════════════════════════════════
+function UpdateView({ updates, onPushUpdate, companies, schedule, progress, showToast }) {
+  const [form, setForm] = useState({ date:TODAY, floor:5, room:1, teamId:"", completedActivities:[], causes:{ Piso:"", Parede:"", Bancada:"" } });
+  const allTeams = companies.flatMap(co => co.teams.map(t=>({...t,coName:co.name,coColor:co.color})));
+  const roomCount = schedule[form.floor]?.roomCount || 10;
+  const alreadyDone = act => !!progress.completed[`${form.floor}_${form.room}_${act}`];
+  const toggleAct   = act => setForm(p => ({ ...p, completedActivities: p.completedActivities.includes(act) ? p.completedActivities.filter(a=>a!==act) : [...p.completedActivities, act] }));
+  const actColors   = { Piso:"#38bdf8", Parede:"#34d399", Bancada:"#a78bfa" };
+
+  const submit = async () => {
+    const notDone = ACTIVITIES.filter(a => !form.completedActivities.includes(a) && !alreadyDone(a));
+    await onPushUpdate({
+      id: `u${Date.now()}`, date: form.date, floor: form.floor, room: form.room,
+      teamId: form.teamId || allTeams[0]?.id || "",
+      completedActivities: form.completedActivities,
+      notCompleted: notDone.map(a => ({ activity:a, cause:form.causes[a]||"" })),
+      cause: notDone.find(a => form.causes[a]) ? form.causes[notDone.find(a=>form.causes[a])] : null,
+      ts: Date.now()
+    });
+    setForm(p => ({ ...p, room:Math.min(p.room+1,roomCount), completedActivities:[], causes:{Piso:"",Parede:"",Bancada:""} }));
+    showToast("✅ Registro salvo e sincronizado!");
+  };
+
+  const floorCo = companies.find(c=>c.teams.some(t=>t.assignedFloors.includes(form.floor)));
+
+  return React.createElement("div", null,
+    React.createElement("div", { style:{ fontSize:18, fontWeight:800, color:"#f1f5f9", marginBottom:4 } }, "Atualização Diária"),
+    React.createElement("p", { style:{ fontSize:11, color:"#475569", marginBottom:20 } }, "Preencha ao final do turno · Dados salvos em tempo real"),
+    React.createElement("div", { style:S.grid2 },
+      React.createElement("div", { style:S.card },
+        React.createElement("p", { style:S.h3 }, "Dados do Registro"),
+        React.createElement("div", { style:{...S.grid2, marginBottom:12} },
+          React.createElement("div", null, React.createElement("label", { style:S.label }, "Data"),
+            React.createElement("input", { style:S.input, type:"date", value:form.date, onChange:e=>setForm(p=>({...p,date:e.target.value})) })
+          ),
+          React.createElement("div", null, React.createElement("label", { style:S.label }, "Pavimento"),
+            React.createElement("select", { style:S.input, value:form.floor, onChange:e=>setForm(p=>({...p,floor:+e.target.value,room:1})) },
+              FLOORS.map(f => React.createElement("option", { key:f, value:f }, f+"° Pavimento"))
+            )
+          ),
+          React.createElement("div", null, React.createElement("label", { style:S.label }, "Banheiro Nº"),
+            React.createElement("select", { style:S.input, value:form.room, onChange:e=>setForm(p=>({...p,room:+e.target.value})) },
+              Array.from({length:roomCount},(_,i)=>i+1).map(r => React.createElement("option", { key:r, value:r }, "Banheiro "+r))
+            )
+          ),
+          React.createElement("div", null, React.createElement("label", { style:S.label }, "Equipe"),
+            React.createElement("select", { style:S.input, value:form.teamId||allTeams[0]?.id||"", onChange:e=>setForm(p=>({...p,teamId:e.target.value})) },
+              allTeams.map(t => React.createElement("option", { key:t.id, value:t.id }, t.coName+" · "+t.name+" ("+t.people+"p)"))
+            )
+          )
+        ),
+        React.createElement("div", { style:{ marginBottom:18 } },
+          React.createElement("label", { style:{...S.label,marginBottom:12} }, "Atividades do Dia"),
+          ACTIVITIES.map(act => {
+            const done = alreadyDone(act), checked = form.completedActivities.includes(act);
+            return React.createElement("div", { key:act, style:{ marginBottom:8, padding:"10px 12px", background:done?"rgba(52,211,153,0.06)":checked?"rgba(56,189,248,0.06)":"rgba(255,255,255,0.02)", borderRadius:8, border:`1px solid ${done?"rgba(52,211,153,0.25)":checked?"rgba(56,189,248,0.25)":"#1e2d3d"}` } },
+              React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:10 } },
+                React.createElement("input", { type:"checkbox", checked:done||checked, disabled:done, onChange:()=>toggleAct(act), style:{ width:15, height:15, cursor:done?"not-allowed":"pointer", accentColor:actColors[act] } }),
+                React.createElement("span", { style:{ fontSize:13, fontWeight:700, color:"#e2e8f0" } }, act),
+                done && React.createElement("span", { style:S.badge("#34d399") }, "✓ Já concluído")
+              ),
+              !done && !checked && React.createElement("div", { style:{ marginTop:8, marginLeft:25 } },
+                React.createElement("label", { style:S.label }, "Causa (opcional)"),
+                React.createElement("select", { style:S.input, value:form.causes[act], onChange:e=>setForm(p=>({...p,causes:{...p.causes,[act]:e.target.value}})) },
+                  React.createElement("option", { value:"" }, "— Nenhuma —"),
+                  DELAY_CAUSES.map(c => React.createElement("option", { key:c, value:c }, c))
+                )
+              )
+            );
+          })
+        ),
+        React.createElement("button", { style:{...S.btnP, width:"100%", padding:"12px", fontSize:13}, onClick:submit }, "💾 Salvar Registro")
+      ),
+      React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:14 } },
+        React.createElement("div", { style:S.card },
+          React.createElement("p", { style:S.h3 }, form.floor+"° Pav · Banheiro "+form.room),
+          floorCo && React.createElement("div", { style:{...S.badge(floorCo.color),marginBottom:12,fontSize:11} }, "Empresa: "+floorCo.name),
+          ACTIVITIES.map(act => {
+            const doneDate = progress.completed[`${form.floor}_${form.room}_${act}`];
+            return React.createElement("div", { key:act, style:{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 12px", background:doneDate?"rgba(52,211,153,0.05)":"rgba(251,191,36,0.04)", borderRadius:8, marginBottom:7, border:`1px solid ${doneDate?"rgba(52,211,153,0.18)":"rgba(251,191,36,0.15)"}` } },
+              React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8 } },
+                React.createElement("div", { style:{ width:7, height:7, borderRadius:"50%", background:actColors[act] } }),
+                React.createElement("span", { style:{ fontSize:12, fontWeight:700, color:"#e2e8f0" } }, act)
+              ),
+              doneDate ? React.createElement("span", { style:S.badge("#34d399") }, "✓ "+doneDate) : React.createElement("span", { style:S.badge("#fbbf24") }, "Pendente")
+            );
+          })
+        ),
+        React.createElement("div", { style:S.card },
+          React.createElement("p", { style:S.h3 }, "📋 Últimos Registros"),
+          updates.length===0 && React.createElement("p", { style:{ color:"#475569", fontSize:12 } }, "Nenhum registro ainda."),
+          [...updates].reverse().slice(0,8).map(u => {
+            const co = companies.find(c=>c.teams.some(t=>t.id===u.teamId));
+            return React.createElement("div", { key:u.id||u.ts, style:{ padding:"7px 0", borderBottom:"1px solid #0f1923", fontSize:11 } },
+              React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:2 } },
+                React.createElement("span", { style:{ fontWeight:700, color:"#cbd5e1" } }, u.date+" · "+u.floor+"° · B."+u.room),
+                co && React.createElement("span", { style:S.badge(co.color) }, co.name)
+              ),
+              React.createElement("div", null,
+                u.completedActivities?.length>0 && React.createElement("span", { style:{ color:"#34d399" } }, "✓ "+u.completedActivities.join(", ")),
+                u.notCompleted?.some(nc=>nc.cause) && React.createElement("span", { style:{ color:"#fbbf24", marginLeft:8 } }, "⚠ "+u.notCompleted.find(nc=>nc.cause)?.cause)
+              )
+            );
+          })
+        )
+      )
+    )
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ANALYSIS VIEW
+// ══════════════════════════════════════════════════════════════════════
+function AnalysisView({ companies, schedule, updates, progress, aiInsights, isLoadingAI, onRunAI }) {
+  const teamStats = companies.flatMap(co => co.teams.map(team => {
+    const s = (team.assignedFloors||[]).reduce((acc,fl) => { const rc=schedule[fl]?.roomCount||10; for(let r=1;r<=rc;r++) ACTIVITIES.forEach(a=>{acc.total++;if(progress.completed[`${fl}_${r}_${a}`])acc.done++;}); return acc; }, {done:0,total:0});
+    return { co, team, pct:s.total>0?(s.done/s.total)*100:0, s };
+  }));
+  const causeStats = {};
+  updates.forEach(u=>(u.notCompleted||[]).forEach(nc=>{if(nc.cause)causeStats[nc.cause]=(causeStats[nc.cause]||0)+1;}));
+  const topCauses   = Object.entries(causeStats).sort((a,b)=>b[1]-a[1]);
+  const totalCauses = Object.values(causeStats).reduce((a,b)=>a+b,0);
+  const barData     = teamStats.map(({co,pct})=>({name:co.name,pct:+pct.toFixed(1),color:co.color}));
+
+  return React.createElement("div", null,
+    React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 } },
+      React.createElement("div", null,
+        React.createElement("div", { style:{ fontSize:18, fontWeight:800, color:"#f1f5f9" } }, "Análise Inteligente"),
+        React.createElement("p", { style:{ fontSize:11, color:"#475569", marginTop:4 } }, "Relatório executivo · Para apresentação ao CEO")
+      ),
+      React.createElement("button", { style:S.btnP, onClick:onRunAI, disabled:isLoadingAI }, isLoadingAI?"⏳ Analisando...":"🤖 Atualizar Análise IA")
+    ),
+    React.createElement("div", { style:{...S.grid2, marginBottom:14} },
+      React.createElement("div", { style:S.card },
+        React.createElement("p", { style:S.h2 }, "📊 Performance por Empresa"),
+        React.createElement(ResponsiveContainer, { width:"100%", height:160 },
+          React.createElement(BarChart, { data:barData, margin:{top:0,right:10,left:-20,bottom:0} },
+            React.createElement(CartesianGrid, { strokeDasharray:"3 3", stroke:"#0f1923", vertical:false }),
+            React.createElement(XAxis, { dataKey:"name", tick:{fontSize:10,fill:"#94a3b8",fontWeight:700} }),
+            React.createElement(YAxis, { tick:{fontSize:9,fill:"#64748b"}, domain:[0,100], unit:"%" }),
+            React.createElement(Tooltip, { formatter:v=>[v+"%","Progresso"], contentStyle:{background:"#080f18",border:"1px solid #1e2d3d",borderRadius:8,fontSize:11,color:"#e2e8f0"} }),
+            React.createElement(Bar, { dataKey:"pct", radius:[5,5,0,0] },
+              barData.map((e,i) => React.createElement(Cell, { key:i, fill:e.color }))
+            )
+          )
+        ),
+        teamStats.map(({co,team,pct,s}) => React.createElement("div", { key:team.id, style:{ marginBottom:10 } },
+          React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4 } },
+            React.createElement("span", { style:{ fontSize:11, fontWeight:700, color:"#cbd5e1" } }, co.name+" · "+team.name),
+            React.createElement("span", { style:{ fontSize:13, fontWeight:800, color:co.color } }, pct.toFixed(0)+"%")
+          ),
+          React.createElement("div", { style:{ background:"#080f18", borderRadius:5, height:6 } },
+            React.createElement("div", { style:{ width:pct+"%", background:co.color, height:6, borderRadius:5 } })
+          ),
+          React.createElement("div", { style:{ fontSize:10, color:"#475569", marginTop:3 } }, s.done+"/"+s.total+" ativ. · "+team.people+" pess. · "+team.productivity+" dias/banh.")
+        ))
+      ),
+      React.createElement("div", { style:S.card },
+        React.createElement("p", { style:S.h2 }, "⚠️ Causas de Atraso"),
+        topCauses.length===0
+          ? React.createElement("div", { style:{ padding:"20px 0", textAlign:"center" } },
+              React.createElement("div", { style:{ fontSize:32, marginBottom:8 } }, "🟢"),
+              React.createElement("div", { style:{ fontWeight:700, color:"#34d399", fontSize:13 } }, "Nenhuma causa registrada!"),
+              React.createElement("div", { style:{ fontSize:11, color:"#475569", marginTop:4 } }, "Continue assim 🎉")
+            )
+          : topCauses.map(([cause,count]) => {
+              const pct   = totalCauses>0?(count/totalCauses)*100:0;
+              const color = pct>40?"#ef4444":pct>20?"#fbbf24":"#64748b";
+              return React.createElement("div", { key:cause, style:{ marginBottom:12 } },
+                React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:11 } },
+                  React.createElement("span", { style:{ fontWeight:700, color:"#cbd5e1" } }, cause),
+                  React.createElement("span", { style:{ fontWeight:800, color } }, count+"x · "+pct.toFixed(0)+"%")
+                ),
+                React.createElement("div", { style:{ background:"#080f18", borderRadius:4, height:6 } },
+                  React.createElement("div", { style:{ width:pct+"%", background:color, height:6, borderRadius:4 } })
+                )
+              );
+            }),
+        React.createElement("div", { style:{ marginTop:18, padding:12, background:"#080f18", borderRadius:9, border:"1px solid #1e2d3d" } },
+          React.createElement("p", { style:S.h3 }, "Efetivo por Empresa"),
+          companies.map(co => co.teams.map(t => React.createElement("div", { key:t.id, style:{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:"1px solid #0f1923", fontSize:11 } },
+            React.createElement("span", { style:{ fontWeight:700, color:"#cbd5e1" } }, co.name+" · "+t.name),
+            React.createElement("span", { style:S.badge(co.color) }, t.people+" pessoas")
+          )))
+        )
+      )
+    ),
+    React.createElement("div", { style:{ ...S.card, background:"#060d15" } },
+      React.createElement("p", { style:S.h2 }, "🤖 Análise & Recomendações IA"),
+      isLoadingAI
+        ? React.createElement("div", { style:{ padding:"40px 0", textAlign:"center", color:"#475569" } },
+            React.createElement("div", { style:{ fontSize:36, marginBottom:10 } }, "⏳"),
+            React.createElement("div", { style:{ fontWeight:700, color:"#64748b" } }, "Analisando dados da obra..."),
+            React.createElement("div", { style:{ fontSize:11, marginTop:6 } }, "Processando cronograma, equipes e tendências")
+          )
+        : aiInsights
+          ? React.createElement("div", { style:{ fontSize:12, lineHeight:1.9, whiteSpace:"pre-line", color:"#94a3b8" } }, aiInsights)
+          : React.createElement("div", { style:{ padding:"40px 0", textAlign:"center" } },
+              React.createElement("div", { style:{ fontSize:40, marginBottom:10 } }, "🤖"),
+              React.createElement("div", { style:{ fontWeight:700, color:"#64748b", marginBottom:8 } }, "Análise não gerada ainda"),
+              React.createElement("div", { style:{ fontSize:11, color:"#334155", marginBottom:16 } }, "Clique no botão para gerar recomendações"),
+              React.createElement("button", { style:S.btnP, onClick:onRunAI }, "Gerar Análise")
+            )
+    )
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DASHBOARD VIEW
+// ══════════════════════════════════════════════════════════════════════
+function DashboardView({ progress, chartData, companies, setView, aiInsights }) {
+  const ovPct    = progress.totals.totalActs>0?(progress.totals.doneActs/progress.totals.totalActs*100).toFixed(1):"0.0";
+  const atRisk   = FLOORS.filter(f=>progress.floorStats[f]?.variance<-10).length;
+  const critical = FLOORS.filter(f=>progress.floorStats[f]?.variance<-20).length;
+
+  return React.createElement("div", null,
+    React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 } },
+      React.createElement("div", null,
+        React.createElement("div", { style:{ fontSize:20, fontWeight:800, color:"#f1f5f9", letterSpacing:"-0.5px" } }, "Visão Geral da Obra"),
+        React.createElement("div", { style:{ color:"#475569", fontSize:11, marginTop:4 } }, "Sofitel RJ · Instalação de Pedras · "+TODAY)
+      ),
+      React.createElement("div", { style:{ display:"flex", gap:8 } },
+        React.createElement("button", { style:S.btnS, onClick:()=>setView("analysis") }, "🤖 Análise IA"),
+        React.createElement("button", { style:S.btnP, onClick:()=>setView("update") }, "+ Atualização do Dia")
+      )
+    ),
+
+    React.createElement("div", { style:S.grid4 },
+      [{label:"Progresso Geral",value:ovPct+"%",sub:progress.totals.doneActs+"/"+progress.totals.totalActs+" ativ.",color:"#38bdf8"},
+       {label:"Banheiros Completos",value:progress.totals.doneRooms,sub:"de "+progress.totals.totalRooms+" total",color:"#34d399"},
+       {label:"Andares em Risco",value:atRisk,sub:"variação > -10%",color:"#fbbf24"},
+       {label:"Andares Críticos",value:critical,sub:"variação > -20%",color:"#ef4444"}
+      ].map((kpi,i) => React.createElement("div", { key:i, style:{...S.card, borderTop:`3px solid ${kpi.color}`} },
+        React.createElement("div", { style:{ fontSize:9, color:"#64748b", fontWeight:700, textTransform:"uppercase", letterSpacing:"1px", marginBottom:6 } }, kpi.label),
+        React.createElement("div", { style:{ fontSize:28, fontWeight:900, color:kpi.color, lineHeight:1, marginBottom:4 } }, kpi.value),
+        React.createElement("div", { style:{ fontSize:10, color:"#475569" } }, kpi.sub)
+      ))
+    ),
+
+    React.createElement("div", { style:{...S.card, marginTop:14} },
+      React.createElement("p", { style:S.h2 }, "📈 Planejado × Realizado × Tendência"),
+      chartData.length>1
+        ? React.createElement(ResponsiveContainer, { width:"100%", height:210 },
+            React.createElement(LineChart, { data:chartData, margin:{top:5,right:15,left:-15,bottom:5} },
+              React.createElement(CartesianGrid, { strokeDasharray:"3 3", stroke:"#0f1923", vertical:false }),
+              React.createElement(XAxis, { dataKey:"date", tick:{fontSize:9,fill:"#475569"}, interval:Math.max(1,Math.floor(chartData.length/10)) }),
+              React.createElement(YAxis,  { tick:{fontSize:9,fill:"#475569"} }),
+              React.createElement(Tooltip, { content: React.createElement(ChartTip) }),
+              React.createElement(Legend, { iconSize:8, wrapperStyle:{fontSize:11,color:"#64748b"}, formatter:v=>v==="planned"?"Planejado":v==="actual"?"Realizado":"Tendência" }),
+              React.createElement(Line, { type:"monotone", dataKey:"planned", stroke:"#1e2d3d", strokeWidth:2,   dot:false, strokeDasharray:"6 4" }),
+              React.createElement(Line, { type:"monotone", dataKey:"actual",  stroke:"#38bdf8", strokeWidth:2.5, dot:false, activeDot:{r:5,fill:"#38bdf8"} }),
+              React.createElement(Line, { type:"monotone", dataKey:"trend",   stroke:"#fbbf24", strokeWidth:2,   dot:false, strokeDasharray:"4 3" }),
+              React.createElement(ReferenceLine, { x:TODAY.slice(5), stroke:"#ef4444", strokeDasharray:"4 3", strokeWidth:1.5 })
+            )
+          )
+        : React.createElement("div", { style:{ height:210, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#475569" } },
+            React.createElement("div", { style:{ fontSize:32, marginBottom:8 } }, "📊"),
+            React.createElement("div", { style:{ fontWeight:700, fontSize:13, color:"#64748b" } }, "Nenhum dado ainda"),
+            React.createElement("div", { style:{ fontSize:11, marginTop:4 } }, "Faça a primeira atualização diária")
+          )
+    ),
+
+    React.createElement("div", { style:{...S.card, marginTop:14} },
+      React.createElement("p", { style:S.h2 }, "🏢 Status por Pavimento"),
+      React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 } },
+        FLOORS.map(fl => {
+          const s  = progress.floorStats[fl];
+          const co = companies.find(c=>c.teams.some(t=>t.assignedFloors.includes(fl)));
+          const color = s.variance>=0?"#34d399":s.variance>-10?"#fbbf24":"#ef4444";
+          return React.createElement("div", { key:fl, style:{ borderRadius:9, padding:"10px 12px", background:"#0f1923", borderLeft:`4px solid ${color}`, border:"1px solid #1e2d3d", borderLeftWidth:4 } },
+            React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 } },
+              React.createElement("span", { style:{ fontWeight:900, fontSize:14, color:"#f1f5f9" } }, fl+"°"),
+              React.createElement("span", { style:{...S.badge(color), fontSize:9} }, (s.variance>0?"+":"")+s.variance.toFixed(1)+"%")
+            ),
+            co && React.createElement("div", { style:{ fontSize:9, color:"#475569", fontWeight:700, marginBottom:6 } }, co.name),
+            React.createElement("div", { style:{ background:"#1e2d3d", borderRadius:4, height:4, marginBottom:4 } },
+              React.createElement("div", { style:{ width:Math.min(100,s.actualPct)+"%", background:color, height:4, borderRadius:4 } })
+            ),
+            React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#475569", fontWeight:700 } },
+              React.createElement("span", null, "Real "+s.actualPct.toFixed(0)+"%"),
+              React.createElement("span", null, "Plan "+s.plannedPct.toFixed(0)+"%")
+            ),
+            React.createElement("div", { style:{ fontSize:9, color:"#334155", marginTop:2 } }, s.doneRooms+"/"+s.roomCount+" banh.")
+          );
+        })
+      )
+    ),
+
+    aiInsights && React.createElement("div", { style:{...S.card, marginTop:14, background:"#060d15"} },
+      React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 } },
+        React.createElement("span", { style:{ fontWeight:800, fontSize:13, color:"#f1f5f9" } }, "🤖 Últimas Recomendações IA"),
+        React.createElement("button", { style:{...S.btnS, fontSize:10, padding:"4px 10px"}, onClick:()=>setView("analysis") }, "Ver completo →")
+      ),
+      React.createElement("div", { style:{ fontSize:11, lineHeight:1.8, color:"#64748b", whiteSpace:"pre-line" } },
+        aiInsights.split("\n").slice(0,10).join("\n")+(aiInsights.split("\n").length>10?"\n...":"")
+      )
+    )
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// MAIN APP
+// ══════════════════════════════════════════════════════════════════════
+function App() {
+  const [view, setView]           = useState("dashboard");
+  const [companies, setCompanies] = useState(INIT_COMPANIES);
+  const [schedule, setSchedule]   = useState(genSchedule);
+  const [updates, setUpdates]     = useState([]);
+  const [aiInsights, setAiInsights] = useState("");
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [toast, setToast]         = useState(null);
+  const [connCount, setConnCount] = useState(0);
+
+  // ── Firebase real-time listeners ──
+  useEffect(() => {
+    const ref = REF;
+    ref.on("value", snap => {
+      const d = snap.val();
+      if (!d) {
+        // First run: write initial data
+        REF.set({ companies: INIT_COMPANIES, schedule: genSchedule(), updates: {}, aiInsights: "" });
+      } else {
+        if (d.companies) setCompanies(Array.isArray(d.companies) ? d.companies : Object.values(d.companies));
+        if (d.schedule)  setSchedule(d.schedule);
+        if (d.updates)   setUpdates(Object.values(d.updates).sort((a,b) => (a.date||"") > (b.date||"") ? 1 : -1));
+        if (d.aiInsights) setAiInsights(d.aiInsights);
+      }
+      setConnected(true);
+      // Hide splash
+      const splash = document.getElementById("splash");
+      if (splash) splash.classList.add("hide");
+      setTimeout(() => { if (splash) splash.remove(); }, 500);
+    }, err => {
+      console.error("Firebase error:", err);
+      setConnected(false);
+    });
+    // Connected users count (optional)
+    const connRef = db.ref(".info/connected");
+    connRef.on("value", snap => { if (snap.val()) setConnCount(c => c + 1); });
+    return () => { ref.off(); connRef.off(); };
+  }, []);
+
+  const showToast = useCallback(msg => { setToast(msg); setTimeout(()=>setToast(null), 3500); }, []);
+
+  // ── Firebase write functions ──
+  const saveCompanies = useCallback(c  => REF.child("companies").set(c), []);
+  const saveSchedule  = useCallback(s  => REF.child("schedule").set(s), []);
+  const pushUpdate    = useCallback(u  => REF.child("updates").push(u), []);
+  const saveAI        = useCallback(ai => REF.child("aiInsights").set(ai), []);
+
+  // ── Progress computation ──
+  const progress = useMemo(() => {
+    const completed = {};
+    updates.forEach(u => (u.completedActivities||[]).forEach(act => {
+      const k = `${u.floor}_${u.room}_${act}`;
+      if (!completed[k] || u.date > completed[k]) completed[k] = u.date;
+    }));
+    const floorStats = {};
+    FLOORS.forEach(fl => {
+      const sc  = schedule[fl]||{};
+      const rc  = sc.roomCount||10;
+      let dA=0, dR=0;
+      for (let r=1;r<=rc;r++) { const d=ACTIVITIES.filter(a=>completed[`${fl}_${r}_${a}`]); dA+=d.length; if(d.length===3)dR++; }
+      const tot = rc*3;
+      const el  = Math.max(0, diffD(sc.startDate||TODAY, TODAY));
+      const td  = Math.max(1, diffD(sc.startDate||TODAY, sc.endDate||fmt(addD(new Date(),90))));
+      const pPct = Math.min(100, (el/td)*100);
+      const aPct = tot>0?(dA/tot)*100:0;
+      floorStats[fl] = { roomCount:rc, doneRooms:dR, doneActs:dA, total:tot, plannedPct:pPct, actualPct:aPct, variance:aPct-pPct, startDate:sc.startDate, endDate:sc.endDate };
+    });
+    const totals = FLOORS.reduce((acc,f)=>{ const s=floorStats[f]; acc.doneActs+=s.doneActs; acc.totalActs+=s.total; acc.doneRooms+=s.doneRooms; acc.totalRooms+=s.roomCount; return acc; }, {doneActs:0,totalActs:0,doneRooms:0,totalRooms:0});
+    return { completed, floorStats, totals };
+  }, [updates, schedule]);
+
+  // ── Chart data ──
+  const chartData = useMemo(() => {
+    const dates = [...new Set(updates.map(u=>u.date))].sort();
+    const base  = dates[0]||TODAY;
+    const data  = [];
+    for (let i=0; i<=diffD(base, fmt(addD(new Date(),35))); i++) {
+      const date   = fmt(addD(new Date(base), i));
+      const isPast = date<=TODAY;
+      let planned  = 0;
+      FLOORS.forEach(fl => { const sc=schedule[fl]; if(!sc||date<sc.startDate) return; const el=Math.max(0,diffD(sc.startDate,date)); const td=Math.max(1,diffD(sc.startDate,sc.endDate)); planned+=Math.min((sc.roomCount||10)*3,(el/td)*(sc.roomCount||10)*3); });
+      const entry = { date:date.slice(5), planned:Math.round(planned) };
+      if (isPast) entry.actual = Object.entries(progress.completed).filter(([_,d])=>d<=date).length;
+      if (!isPast && dates.length>=2) { const la=Object.keys(progress.completed).length; const rate=Math.max(0,la/Math.max(1,diffD(dates[0],TODAY))); entry.trend=Math.round(la+rate*diffD(TODAY,date)); }
+      data.push(entry);
+    }
+    return data;
+  }, [updates, schedule, progress]);
+
+  // ── AI Analysis ──
+  const runAI = useCallback(async () => {
+    setIsLoadingAI(true);
+    const prompt = `Você é um consultor sênior de gestão de obras hoteleiras de alto padrão.
+
+OBRA: Hotel Sofitel Rio de Janeiro — Instalação de Pedras (Piso, Parede, Bancada)
+ANDARES: 5° ao 20° | DATA: ${TODAY}
+
+EMPRESAS E EQUIPES:
+${companies.map(co=>`• ${co.name}: ${co.teams.map(t=>`${t.name} — ${t.people} pessoas, ${t.productivity} dias/banheiro, andares: [${t.assignedFloors.join(",")}]`).join(" | ")}`).join("\n")}
+
+PROGRESSO POR ANDAR:
+${FLOORS.map(f=>{ const s=progress.floorStats[f]; const co=companies.find(c=>c.teams.some(t=>t.assignedFloors.includes(f))); return `• ${f}° (${co?.name||"—"}): Real ${s.actualPct.toFixed(1)}% | Plan ${s.plannedPct.toFixed(1)}% | Var ${s.variance>0?"+":""}${s.variance.toFixed(1)}% | ${s.doneRooms}/${s.roomCount} banh.`; }).join("\n")}
+
+TOTAL: ${progress.totals.doneRooms}/${progress.totals.totalRooms} banheiros | ${progress.totals.totalActs>0?((progress.totals.doneActs/progress.totals.totalActs)*100).toFixed(1):0}% das atividades
+
+ÚLTIMAS OCORRÊNCIAS:
+${updates.slice(-10).map(u=>`${u.date} | ${u.floor}° B.${u.room} | ✓ ${u.completedActivities?.join(",")||"-"}${u.cause?" | ⚠ "+u.cause:""}`).join("\n")||"Nenhuma ainda"}
+
+Forneça:
+1. 🔴🟡🟢 STATUS GERAL (2-3 frases)
+2. ⚠️ ALERTAS — andares e equipes em risco (bullets)
+3. 📈 TENDÊNCIA — se continuar assim, qual o novo prazo projetado?
+4. ✅ AÇÕES IMEDIATAS — o que o gerente deve fazer hoje/amanhã (bullets práticos)
+5. 🔄 REALOCAÇÃO — quem está adiantado e pode reforçar quem está atrasado (específico)
+6. 🎯 META DIÁRIA — atividades mínimas por equipe para manter o cronograma
+
+Direto, executivo, acionável. Para o CEO. Em português.`;
+
+    try {
+      const res  = await fetch("/api/analyze", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ prompt }) });
+      const data = await res.json();
+      const text = data.content?.find(b=>b.type==="text")?.text || data.error || "Erro ao gerar análise.";
+      setAiInsights(text);
+      await saveAI(text);
+    } catch(e) {
+      const msg = "Erro ao conectar com a IA. Verifique se o servidor está configurado corretamente (/api/analyze).";
+      setAiInsights(msg);
+    }
+    setIsLoadingAI(false);
+  }, [companies, progress, schedule, updates, saveAI]);
+
+  const NAV = [
+    { id:"dashboard", icon:"📊", label:"Dashboard" },
+    { id:"config",    icon:"⚙️", label:"Configurações" },
+    { id:"update",    icon:"📝", label:"Atualização" },
+    { id:"analysis",  icon:"🤖", label:"Análise IA" },
+  ];
+
+  return React.createElement("div", { style:{ display:"flex", height:"100vh", overflow:"hidden" } },
+    // Sidebar
+    React.createElement("nav", { style:{ width:200, background:"#060d15", display:"flex", flexDirection:"column", flexShrink:0, borderRight:"1px solid #0f1923" } },
+      React.createElement("div", { style:{ padding:"20px 16px 18px", borderBottom:"1px solid #0f1923" } },
+        React.createElement("div", { style:{ color:"#f1f5f9", fontWeight:900, fontSize:11, letterSpacing:"2.5px", fontFamily:"'Sora',sans-serif" } }, "SOFITEL RJ"),
+        React.createElement("div", { style:{ color:"#1e2d3d", fontSize:10, marginTop:3, fontWeight:600 } }, "Instalação de Pedras"),
+        React.createElement("div", { style:{ marginTop:8, fontSize:10, display:"flex", alignItems:"center" } },
+          connected
+            ? React.createElement("span", { className:"online-dot" })
+            : React.createElement("span", { className:"offline-dot" }),
+          React.createElement("span", { style:{ color:connected?"#34d399":"#ef4444" } }, connected?"Online":"Sem conexão")
+        )
+      ),
+      React.createElement("div", { style:{ padding:"8px 0", flex:1 } },
+        NAV.map(n => React.createElement("div", { key:n.id, onClick:()=>setView(n.id), style:{ display:"flex", alignItems:"center", gap:9, padding:"11px 16px", cursor:"pointer", borderLeft:view===n.id?"3px solid #0ea5e9":"3px solid transparent", background:view===n.id?"#0f1923":"transparent", color:view===n.id?"#f1f5f9":"#475569", fontSize:12, fontWeight:view===n.id?700:500, marginBottom:2 } },
+          React.createElement("span", { style:{ fontSize:14 } }, n.icon), n.label
+        ))
+      ),
+      React.createElement("div", { style:{ padding:"14px 16px", borderTop:"1px solid #0f1923" } },
+        React.createElement("div", { style:{ fontSize:9, color:"#1e2d3d", textTransform:"uppercase", letterSpacing:"1px", marginBottom:4, fontWeight:700 } }, "Progresso Total"),
+        React.createElement("div", { style:{ fontSize:20, fontWeight:900, color:"#38bdf8", fontFamily:"'Sora',sans-serif" } },
+          progress.totals.totalActs>0?(progress.totals.doneActs/progress.totals.totalActs*100).toFixed(0):0,"%"
+        ),
+        React.createElement("div", { style:{ background:"#0f1923", borderRadius:3, height:3, marginTop:6 } },
+          React.createElement("div", { style:{ width:(progress.totals.totalActs>0?(progress.totals.doneActs/progress.totals.totalActs*100):0)+"%", background:"#38bdf8", height:3, borderRadius:3 } })
+        ),
+        React.createElement("div", { style:{ fontSize:9, color:"#1e2d3d", marginTop:4 } }, updates.length+" registros · "+progress.totals.doneRooms+"/"+progress.totals.totalRooms+" banh.")
+      )
+    ),
+
+    // Main content
+    React.createElement("main", { style:{ flex:1, overflow:"auto", padding:24, background:"#0b1220" } },
+      !connected && React.createElement("div", { style:{ background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:8, padding:"10px 16px", marginBottom:16, fontSize:12, color:"#ef4444", fontWeight:600 } },
+        "🔴 Sem conexão com Firebase — verifique a configuração no arquivo index.html"
+      ),
+      view==="dashboard" && React.createElement(DashboardView, { progress, chartData, companies, setView, aiInsights }),
+      view==="config"    && React.createElement(ConfigView, { companies, schedule, onSaveCompanies:saveCompanies, onSaveSchedule:saveSchedule, showToast }),
+      view==="update"    && React.createElement(UpdateView, { updates, onPushUpdate:pushUpdate, companies, schedule, progress, showToast }),
+      view==="analysis"  && React.createElement(AnalysisView, { companies, schedule, updates, progress, aiInsights, isLoadingAI, onRunAI:runAI })
+    ),
+
+    // Toast
+    toast && React.createElement("div", { style:{ position:"fixed", bottom:20, right:20, padding:"11px 20px", borderRadius:9, background:"#0f1923", color:"#f1f5f9", fontSize:12, fontWeight:700, boxShadow:"0 8px 32px rgba(0,0,0,0.5)", zIndex:9999, borderLeft:"3px solid #34d399" } }, toast)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
