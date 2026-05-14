@@ -10,9 +10,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
- <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/react-smooth@4.0.1/dist/react-smooth.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/recharts@2.8.0/umd/Recharts.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body, #root { height: 100%; }
@@ -69,10 +66,61 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.database();
 const REF = db.ref("sofitel");
 
-// ── React & Recharts ──
+// ── React hooks ──
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
-const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-        ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell } = Recharts;
+
+// ── SVG Line Chart (sem dependências externas) ──
+function SimpleLineChart({ data }) {
+  if (!data || data.length < 2) return React.createElement("div", { style:{ height:210, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#475569" } },
+    React.createElement("div", { style:{ fontSize:32, marginBottom:8 } }, "📊"),
+    React.createElement("div", { style:{ fontSize:13, fontWeight:700, color:"#64748b" } }, "Nenhum dado ainda"),
+    React.createElement("div", { style:{ fontSize:11, marginTop:4 } }, "Faça a primeira atualização diária")
+  );
+  const W=680, H=200, pL=45, pR=20, pT=10, pB=30;
+  const cW=W-pL-pR, cH=H-pT-pB;
+  const allVals = data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
+  const maxV = Math.max(...allVals, 1);
+  const xp = i => pL + (i/(data.length-1))*cW;
+  const yp = v => pT + cH - (v/maxV)*cH;
+  const mkLine = (key, color, dash) => {
+    const pts = data.map((d,i)=>({v:d[key],i})).filter(p=>p.v!==undefined);
+    if (pts.length<2) return null;
+    const path = pts.map((p,j)=>`${j===0?"M":"L"} ${xp(p.i).toFixed(1)} ${yp(p.v).toFixed(1)}`).join(" ");
+    return React.createElement("path",{d:path,stroke:color,strokeWidth:2,fill:"none",strokeDasharray:dash||"none",key:key});
+  };
+  const step = Math.max(1, Math.floor(data.length/8));
+  return React.createElement("div", { style:{ position:"relative" } },
+    React.createElement("div", { style:{ display:"flex", gap:16, justifyContent:"flex-end", marginBottom:8, fontSize:10, color:"#64748b", fontWeight:700 } },
+      React.createElement("span", null, "── Planejado"),
+      React.createElement("span", { style:{ color:"#38bdf8" } }, "── Realizado"),
+      React.createElement("span", { style:{ color:"#fbbf24" } }, "── Tendência")
+    ),
+    React.createElement("svg", { viewBox:`0 0 ${W} ${H}`, style:{ width:"100%", height:210 } },
+      [0,0.25,0.5,0.75,1].map((p,i)=>React.createElement("line",{key:i,x1:pL,x2:W-pR,y1:(pT+cH*(1-p)).toFixed(1),y2:(pT+cH*(1-p)).toFixed(1),stroke:"#0f1923",strokeWidth:1})),
+      mkLine("planned","#334155","6,4"),
+      mkLine("actual","#38bdf8",null),
+      mkLine("trend","#fbbf24","4,3"),
+      data.filter((_,i)=>i%step===0).map((d,i)=>React.createElement("text",{key:i,x:xp(data.indexOf(d)).toFixed(1),y:H-5,textAnchor:"middle",fontSize:9,fill:"#475569"},d.date)),
+      [0,Math.round(maxV/2),maxV].map((v,i)=>React.createElement("text",{key:i,x:pL-4,y:yp(v)+3,textAnchor:"end",fontSize:9,fill:"#475569"},v))
+    )
+  );
+}
+
+// ── SVG Bar Chart ──
+function SimpleBarChart({ data }) {
+  if (!data || data.length===0) return null;
+  return React.createElement("div", { style:{ padding:"8px 0" } },
+    data.map((item,i)=>React.createElement("div",{key:i,style:{marginBottom:12}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:5,fontSize:11,fontWeight:700}},
+        React.createElement("span",{style:{color:"#cbd5e1"}},item.name),
+        React.createElement("span",{style:{color:item.color}},item.pct+"%")
+      ),
+      React.createElement("div",{style:{background:"#080f18",borderRadius:5,height:10}},
+        React.createElement("div",{style:{width:item.pct+"%",background:item.color,height:10,borderRadius:5,transition:"width 0.4s"}})
+      )
+    ))
+  );
+}
 
 // ── Constants ──
 const FLOORS = Array.from({ length: 16 }, (_, i) => i + 5);
@@ -117,19 +165,6 @@ const S = {
   grid3:  { display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 },
   grid4:  { display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 },
 };
-
-// ── Tooltip personalizado ──
-function ChartTip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return React.createElement("div", { style:{ background:"#0b1220", border:"1px solid #243044", borderRadius:8, padding:"10px 14px", fontSize:11 } },
-    React.createElement("div", { style:{ fontWeight:700, color:"#64748b", marginBottom:6 } }, label),
-    payload.map(p => React.createElement("div", { key:p.name, style:{ display:"flex", gap:8, alignItems:"center", marginBottom:2, color:"#cbd5e1" } },
-      React.createElement("div", { style:{ width:7, height:7, borderRadius:"50%", background:p.color } }),
-      React.createElement("span", null, p.name === "planned" ? "Planejado" : p.name === "actual" ? "Realizado" : "Tendência"),
-      React.createElement("span", { style:{ fontWeight:700, color:"#f1f5f9" } }, p.value)
-    ))
-  );
-}
 
 // ══════════════════════════════════════════════════════════════════════
 // CONFIG VIEW
@@ -401,17 +436,7 @@ function AnalysisView({ companies, schedule, updates, progress, aiInsights, isLo
     React.createElement("div", { style:{...S.grid2, marginBottom:14} },
       React.createElement("div", { style:S.card },
         React.createElement("p", { style:S.h2 }, "📊 Performance por Empresa"),
-        React.createElement(ResponsiveContainer, { width:"100%", height:160 },
-          React.createElement(BarChart, { data:barData, margin:{top:0,right:10,left:-20,bottom:0} },
-            React.createElement(CartesianGrid, { strokeDasharray:"3 3", stroke:"#0f1923", vertical:false }),
-            React.createElement(XAxis, { dataKey:"name", tick:{fontSize:10,fill:"#94a3b8",fontWeight:700} }),
-            React.createElement(YAxis, { tick:{fontSize:9,fill:"#64748b"}, domain:[0,100], unit:"%" }),
-            React.createElement(Tooltip, { formatter:v=>[v+"%","Progresso"], contentStyle:{background:"#080f18",border:"1px solid #1e2d3d",borderRadius:8,fontSize:11,color:"#e2e8f0"} }),
-            React.createElement(Bar, { dataKey:"pct", radius:[5,5,0,0] },
-              barData.map((e,i) => React.createElement(Cell, { key:i, fill:e.color }))
-            )
-          )
-        ),
+        React.createElement(SimpleBarChart, { data: barData }),
         teamStats.map(({co,team,pct,s}) => React.createElement("div", { key:team.id, style:{ marginBottom:10 } },
           React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4 } },
             React.createElement("span", { style:{ fontSize:11, fontWeight:700, color:"#cbd5e1" } }, co.name+" · "+team.name),
@@ -508,24 +533,7 @@ function DashboardView({ progress, chartData, companies, setView, aiInsights }) 
     React.createElement("div", { style:{...S.card, marginTop:14} },
       React.createElement("p", { style:S.h2 }, "📈 Planejado × Realizado × Tendência"),
       chartData.length>1
-        ? React.createElement(ResponsiveContainer, { width:"100%", height:210 },
-            React.createElement(LineChart, { data:chartData, margin:{top:5,right:15,left:-15,bottom:5} },
-              React.createElement(CartesianGrid, { strokeDasharray:"3 3", stroke:"#0f1923", vertical:false }),
-              React.createElement(XAxis, { dataKey:"date", tick:{fontSize:9,fill:"#475569"}, interval:Math.max(1,Math.floor(chartData.length/10)) }),
-              React.createElement(YAxis,  { tick:{fontSize:9,fill:"#475569"} }),
-              React.createElement(Tooltip, { content: React.createElement(ChartTip) }),
-              React.createElement(Legend, { iconSize:8, wrapperStyle:{fontSize:11,color:"#64748b"}, formatter:v=>v==="planned"?"Planejado":v==="actual"?"Realizado":"Tendência" }),
-              React.createElement(Line, { type:"monotone", dataKey:"planned", stroke:"#1e2d3d", strokeWidth:2,   dot:false, strokeDasharray:"6 4" }),
-              React.createElement(Line, { type:"monotone", dataKey:"actual",  stroke:"#38bdf8", strokeWidth:2.5, dot:false, activeDot:{r:5,fill:"#38bdf8"} }),
-              React.createElement(Line, { type:"monotone", dataKey:"trend",   stroke:"#fbbf24", strokeWidth:2,   dot:false, strokeDasharray:"4 3" }),
-              React.createElement(ReferenceLine, { x:TODAY.slice(5), stroke:"#ef4444", strokeDasharray:"4 3", strokeWidth:1.5 })
-            )
-          )
-        : React.createElement("div", { style:{ height:210, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#475569" } },
-            React.createElement("div", { style:{ fontSize:32, marginBottom:8 } }, "📊"),
-            React.createElement("div", { style:{ fontWeight:700, fontSize:13, color:"#64748b" } }, "Nenhum dado ainda"),
-            React.createElement("div", { style:{ fontSize:11, marginTop:4 } }, "Faça a primeira atualização diária")
-          )
+        React.createElement(SimpleLineChart, { data: chartData })
     ),
 
     React.createElement("div", { style:{...S.card, marginTop:14} },
