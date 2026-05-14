@@ -532,8 +532,7 @@ function DashboardView({ progress, chartData, companies, setView, aiInsights }) 
 
     React.createElement("div", { style:{...S.card, marginTop:14} },
       React.createElement("p", { style:S.h2 }, "📈 Planejado × Realizado × Tendência"),
-      chartData.length>1
-        React.createElement(SimpleLineChart, { data: chartData })
+      React.createElement(SimpleLineChart, { data: chartData })
     ),
 
     React.createElement("div", { style:{...S.card, marginTop:14} },
