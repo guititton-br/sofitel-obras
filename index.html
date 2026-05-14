@@ -599,7 +599,7 @@ function App() {
         if (d.companies) setCompanies(Array.isArray(d.companies) ? d.companies : Object.values(d.companies));
         if (d.schedule)  setSchedule(d.schedule);
         if (d.updates)   setUpdates(Object.values(d.updates).sort((a,b) => (a.date||"") > (b.date||"") ? 1 : -1));
-        if (d.aiInsights) setAiInsights(d.aiInsights);
+        if (d.aiInsights) setAiInsights(typeof d.aiInsights === "string" ? d.aiInsights : "");;
       }
       setConnected(true);
       // Hide splash
