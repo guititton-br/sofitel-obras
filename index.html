@@ -94,32 +94,70 @@ const S={
 function LineChart({data,color,h}){
   const H=h||240;
   if(!data||data.length<2)return ce("div",{style:{height:H,display:"flex",alignItems:"center",justifyContent:"center",color:"#B8B5AD",fontSize:12}},"Registre avanços para ver o gráfico");
-  const W=900,CH=H-40,pL=42,pR=16,pT=10,pB=28,cW=W-pL-pR,cH=CH-pT-pB;
+  const meta=data._meta||{};
+  const W=900,CH=H-40,pL=42,pR=20,pT=10,pB=28,cW=W-pL-pR,cH=CH-pT-pB;
   const allV=data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
   const maxV=Math.max(...allV,1);
-  const xp=i=>pL+(i/(data.length-1))*cW;const yp=v=>pT+cH-(v/maxV)*cH;
+  const xp=i=>pL+(i/(data.length-1))*cW;
+  const yp=v=>pT+cH-(v/maxV)*cH;
+
   const mkLine=(key,stroke,dash,sw)=>{
     const pts=data.map((d,i)=>({v:d[key],i})).filter(p=>p.v!==undefined);
     if(pts.length===0)return null;
-    // Single point: draw a short horizontal segment so it's visible
     if(pts.length===1){const x=xp(pts[0].i),y=yp(pts[0].v);return ce("path",{key,d:`M ${(x-4).toFixed(1)} ${y.toFixed(1)} L ${(x+4).toFixed(1)} ${y.toFixed(1)}`,stroke,strokeWidth:(sw||2)+1,fill:"none",strokeLinecap:"round"});}
     return ce("path",{key,d:pts.map((p,j)=>`${j===0?"M":"L"} ${xp(p.i).toFixed(1)} ${yp(p.v).toFixed(1)}`).join(" "),stroke,strokeWidth:sw||2,fill:"none",strokeDasharray:dash||"none"});
   };
+
   const step=Math.max(1,Math.floor(data.length/10));
   const todayI=data.findLastIndex(d=>d.actual!==undefined);
+
+  // Find index where planned reaches 100% (planned end)
+  const plannedEndI=data.findIndex(d=>d.planned>=100);
+  // Find index where trend reaches 100% (projected end)
+  const trendEndI=data.findIndex(d=>d.trend>=100);
+  const hasDelay=meta.delayDays>0;
+
   return ce("div",null,
+    // Delay banner above chart when delayed
+    hasDelay&&ce("div",{style:{display:"flex",alignItems:"center",gap:16,marginBottom:8,padding:"8px 12px",background:"#FBF0F0",borderRadius:8,border:"1px solid #F0D0D0"}},
+      ce("span",{style:{fontSize:11,fontWeight:700,color:"#B86060"}},"⚠ Impacto na entrega"),
+      ce("div",{style:{display:"flex",gap:20}},
+        ce("div",{style:{fontSize:11,color:"#6C6960"}},"Prazo original: ",ce("strong",null,meta.plannedEndDate?.slice(8)+"/"+meta.plannedEndDate?.slice(5,7)+"/"+meta.plannedEndDate?.slice(0,4))),
+        ce("div",{style:{fontSize:11,color:"#B86060"}},"Projeção atual: ",ce("strong",null,meta.projectedEndDate?.slice(8)+"/"+meta.projectedEndDate?.slice(5,7)+"/"+meta.projectedEndDate?.slice(0,4))),
+        ce("div",{style:{fontSize:11,fontWeight:700,color:"#B86060"}},"+"+meta.delayDays+" dias de atraso projetado"),
+        ce("div",{style:{fontSize:11,color:"#B8895A"}},"Ritmo atual: "+meta.ratePerDay+"% / dia")
+      )
+    ),
     ce("svg",{viewBox:`0 0 ${W} ${CH+24}`,style:{width:"100%",height:H-10},preserveAspectRatio:"xMidYMid meet"},
-      [0,.25,.5,.75,1].map((p,i)=>ce("line",{key:i,x1:pL,x2:W-pR,y1:(pT+cH*(1-p)).toFixed(1),y2:(pT+cH*(1-p)).toFixed(1),stroke:"#F0EDE8",strokeWidth:1})),
-      mkLine("planned","#D6D3CC","6,4",1.5),mkLine("actual",color||"#9BB5C8",null,3),mkLine("trend","#C4A882","5,3",2),
+      // Grid lines
+      [0,.25,.5,.75,1].map((p,i)=>ce("line",{key:"g"+i,x1:pL,x2:W-pR,y1:(pT+cH*(1-p)).toFixed(1),y2:(pT+cH*(1-p)).toFixed(1),stroke:"#F0EDE8",strokeWidth:1})),
+      // 100% line
+      ce("line",{key:"100l",x1:pL,x2:W-pR,y1:yp(100).toFixed(1),y2:yp(100).toFixed(1),stroke:"#E8E5DF",strokeWidth:1,strokeDasharray:"2,4"}),
+      ce("text",{key:"100t",x:pL-4,y:yp(100)+3,textAnchor:"end",fontSize:8,fill:"#B8B5AD",fontFamily:"system-ui"},"100%"),
+      // Lines
+      mkLine("planned","#D6D3CC","6,4",1.5),
+      mkLine("actual",color||"#9BB5C8",null,3),
+      mkLine("trend","#C4A882","5,3",2),
+      // Today marker
       todayI>=0&&ce("line",{key:"td",x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#E8C4C4",strokeWidth:1.5,strokeDasharray:"4,3"}),
       todayI>=0&&ce("text",{key:"tdl",x:xp(todayI)+3,y:pT+10,fontSize:8,fill:"#C48282",fontFamily:"system-ui"},"Hoje"),
-      // Dots on actual data points where actual > 0
+      // Planned end marker
+      plannedEndI>=0&&ce("line",{key:"pe",x1:xp(plannedEndI),x2:xp(plannedEndI),y1:pT,y2:pT+cH,stroke:"#C4C1BA",strokeWidth:1,strokeDasharray:"3,4"}),
+      plannedEndI>=0&&ce("text",{key:"pel",x:xp(plannedEndI)+3,y:pT+22,fontSize:7.5,fill:"#8C8980",fontFamily:"system-ui"},"Prazo"),
+      // Projected end marker (only if delayed)
+      hasDelay&&trendEndI>=0&&ce("line",{key:"te",x1:xp(trendEndI),x2:xp(trendEndI),y1:pT,y2:pT+cH,stroke:"#C4A882",strokeWidth:1.5,strokeDasharray:"3,3"}),
+      hasDelay&&trendEndI>=0&&ce("text",{key:"tel",x:xp(trendEndI)+3,y:pT+22,fontSize:7.5,fill:"#B8895A",fontFamily:"system-ui"},"Projeção"),
+      // Delay shaded area between planned end and trend end
+      hasDelay&&plannedEndI>=0&&trendEndI>=0&&ce("rect",{key:"delay-area",x:xp(plannedEndI),y:pT,width:Math.max(0,xp(trendEndI)-xp(plannedEndI)),height:cH,fill:"#C48282",opacity:.06}),
+      // Dots on actual data points
       data.map((d,i)=>d.actual>0?ce("circle",{key:"dot"+i,cx:xp(i).toFixed(1),cy:yp(d.actual).toFixed(1),r:3,fill:color||"#9BB5C8",stroke:"#fff",strokeWidth:1.5}):null).filter(Boolean),
+      // X-axis labels (DD/MM already formatted)
       data.filter((_,i)=>i%step===0).map((d,i)=>ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:CH+16,textAnchor:"middle",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},d.date)),
+      // Y-axis labels
       [0,Math.round(maxV/3),Math.round(maxV*2/3),maxV].map((v,i)=>ce("text",{key:"y"+i,x:pL-4,y:yp(v)+3,textAnchor:"end",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},v+"%"))
     ),
     ce("div",{style:{display:"flex",gap:20,marginTop:6}},
-      [["#D6D3CC","Planejado"],[color||"#9BB5C8","Realizado"],["#C4A882","Tendência"]].map(([c,l])=>
+      [["#D6D3CC","Planejado"],[color||"#9BB5C8","Realizado"],["#C4A882","Tendência (ritmo atual)"]].map(([c,l])=>
         ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#8C8980"}},ce("div",{style:{width:22,height:2,background:c,borderRadius:1}}),l)
       )
     )
@@ -148,12 +186,46 @@ function computeChart(updates,schedules,gid,filterFloor){
   const sched=schedules[gid]||{};
   const floors=filterFloor?[filterFloor]:FLOORS;
 
-  // Start from earliest schedule date (gives context for planned curve)
-  let earliestStart=TODAY;
-  floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&sc.startDate<earliestStart)earliestStart=sc.startDate;});
-  // Chart window: from schedule start to today+40 days
+  // Earliest schedule start and latest planned end
+  let earliestStart=TODAY, latestEnd=fmt(addD(new Date(),90));
+  let hasSchedule=false;
+  floors.forEach(fl=>{
+    const sc=sched[fl];
+    if(!sc?.startDate||!sc?.endDate)return;
+    hasSchedule=true;
+    if(sc.startDate<earliestStart)earliestStart=sc.startDate;
+    if(sc.endDate>latestEnd)latestEnd=sc.endDate;
+  });
+  if(!hasSchedule){earliestStart=TODAY;latestEnd=fmt(addD(new Date(),90));}
+
+  // Current actual % and rate from TODAY
+  const todayAcc={};
+  grpUpd.filter(u=>u.date<=TODAY).forEach(u=>{
+    const k=`${u.floor}_${u.room}_${u.environment||"A"}`;
+    todayAcc[k]=(todayAcc[k]||0)+(u.actualPct||0);
+  });
+  let totalUnitsNow=0;
+  floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&TODAY>=sc.startDate)totalUnitsNow+=sc.roomCount||12;});
+  const todayVals=Object.values(todayAcc).map(v=>Math.min(100,v));
+  const currentActual=totalUnitsNow>0
+    ?todayVals.reduce((a,b)=>a+b,0)/totalUnitsNow
+    :(todayVals.length?todayVals.reduce((a,b)=>a+b,0)/todayVals.length:0);
+
+  // Daily rate = current actual / days since earliest schedule start
+  const daysElapsed=Math.max(1,diffD(earliestStart,TODAY));
+  const ratePerDay=currentActual/daysElapsed; // % per day
+
+  // Project trend end date: when does trend reach 100%?
+  let projectedEndDate=latestEnd;
+  if(ratePerDay>0){
+    const daysToFinish=Math.ceil((100-currentActual)/ratePerDay);
+    projectedEndDate=fmt(addD(new Date(),daysToFinish));
+  }
+  const delayDays=Math.max(0,diffD(latestEnd,projectedEndDate));
+
+  // Chart window: from schedule start to max(plannedEnd, projectedEnd) + 10 days buffer
   const chartStart=earliestStart;
-  const chartEnd=fmt(addD(new Date(),40));
+  const chartEnd=fmt(addD(new Date(projectedEndDate>latestEnd?projectedEndDate:latestEnd),10));
   const totalDays=Math.max(2,diffD(chartStart,chartEnd));
 
   const data=[];
@@ -161,20 +233,23 @@ function computeChart(updates,schedules,gid,filterFloor){
     const date=fmt(addD(new Date(chartStart),i));
     const isPast=date<=TODAY;
 
-    // Planned: weighted average across floors that have started
+    // Planned: linear progress across all floors with schedules
     let planned=0,activeFloors=0;
     floors.forEach(fl=>{
       const sc=sched[fl];
       if(!sc?.startDate||!sc?.endDate)return;
       activeFloors++;
-      if(date<sc.startDate)return; // not started yet
+      if(date<sc.startDate)return;
+      if(date>=sc.endDate){planned+=100;return;}
       const el=Math.max(0,diffD(sc.startDate,date));
       const td=Math.max(1,diffD(sc.startDate,sc.endDate));
       planned+=Math.min(100,(el/td)*100);
     });
-    const entry={date:date.slice(5),planned:Math.round(activeFloors>0?planned/activeFloors:0)};
+    // DD/MM format for x-axis labels
+    const dd=date.slice(8),mm=date.slice(5,7);
+    const entry={date:dd+"/"+mm,fullDate:date,planned:Math.round(activeFloors>0?planned/activeFloors:0)};
 
-    // Actual: cumulative progress up to this date (0 if no updates yet)
+    // Actual: cumulative
     if(isPast){
       const acc={};
       grpUpd.filter(u=>u.date<=date).forEach(u=>{
@@ -182,26 +257,21 @@ function computeChart(updates,schedules,gid,filterFloor){
         acc[k]=(acc[k]||0)+(u.actualPct||0);
       });
       const vals=Object.values(acc).map(v=>Math.min(100,v));
-      // Count all expected units for denominator (total rooms across floors with schedules)
-      let totalUnits=0;
-      floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&date>=sc.startDate)totalUnits+=sc.roomCount||12;});
-      entry.actual=totalUnits>0
-        ?Math.round(vals.reduce((a,b)=>a+b,0)/totalUnits)
-        :(vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0);
+      let tu=0;floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&date>=sc.startDate)tu+=sc.roomCount||12;});
+      entry.actual=tu>0?Math.round(vals.reduce((a,b)=>a+b,0)/tu):(vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0);
     }
 
-    // Trend: extrapolate from accumulated actual (works with 1+ real points)
-    if(!isPast){
-      const lastActuals=data.filter(d=>d.actual!==undefined);
-      if(lastActuals.length>=1){
-        const lastVal=lastActuals[lastActuals.length-1].actual;
-        const daysElapsed=Math.max(1,diffD(chartStart,TODAY)+1);
-        const rate=lastVal/daysElapsed;
-        entry.trend=Math.min(100,Math.round(lastVal+rate*diffD(TODAY,date)));
-      }
+    // Trend: project at current rate from today's actual, capped at 100
+    if(!isPast&&ratePerDay>0){
+      const daysAhead=diffD(TODAY,date);
+      entry.trend=Math.min(100,Math.round(currentActual+ratePerDay*daysAhead));
     }
+
     data.push(entry);
   }
+
+  // Attach metadata to array
+  data._meta={plannedEndDate:latestEnd,projectedEndDate,delayDays,currentActual:Math.round(currentActual),ratePerDay:ratePerDay.toFixed(2)};
   return data;
 }
 
