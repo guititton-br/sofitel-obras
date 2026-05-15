@@ -98,7 +98,13 @@ function LineChart({data,color,h}){
   const allV=data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
   const maxV=Math.max(...allV,1);
   const xp=i=>pL+(i/(data.length-1))*cW;const yp=v=>pT+cH-(v/maxV)*cH;
-  const mkLine=(key,stroke,dash,sw)=>{const pts=data.map((d,i)=>({v:d[key],i})).filter(p=>p.v!==undefined);if(pts.length<2)return null;return ce("path",{key,d:pts.map((p,j)=>`${j===0?"M":"L"} ${xp(p.i).toFixed(1)} ${yp(p.v).toFixed(1)}`).join(" "),stroke,strokeWidth:sw||2,fill:"none",strokeDasharray:dash||"none"});};
+  const mkLine=(key,stroke,dash,sw)=>{
+    const pts=data.map((d,i)=>({v:d[key],i})).filter(p=>p.v!==undefined);
+    if(pts.length===0)return null;
+    // Single point: draw a short horizontal segment so it's visible
+    if(pts.length===1){const x=xp(pts[0].i),y=yp(pts[0].v);return ce("path",{key,d:`M ${(x-4).toFixed(1)} ${y.toFixed(1)} L ${(x+4).toFixed(1)} ${y.toFixed(1)}`,stroke,strokeWidth:(sw||2)+1,fill:"none",strokeLinecap:"round"});}
+    return ce("path",{key,d:pts.map((p,j)=>`${j===0?"M":"L"} ${xp(p.i).toFixed(1)} ${yp(p.v).toFixed(1)}`).join(" "),stroke,strokeWidth:sw||2,fill:"none",strokeDasharray:dash||"none"});
+  };
   const step=Math.max(1,Math.floor(data.length/10));
   const todayI=data.findLastIndex(d=>d.actual!==undefined);
   return ce("div",null,
@@ -107,6 +113,8 @@ function LineChart({data,color,h}){
       mkLine("planned","#D6D3CC","6,4",1.5),mkLine("actual",color||"#9BB5C8",null,3),mkLine("trend","#C4A882","5,3",2),
       todayI>=0&&ce("line",{key:"td",x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#E8C4C4",strokeWidth:1.5,strokeDasharray:"4,3"}),
       todayI>=0&&ce("text",{key:"tdl",x:xp(todayI)+3,y:pT+10,fontSize:8,fill:"#C48282",fontFamily:"system-ui"},"Hoje"),
+      // Dots on actual data points where actual > 0
+      data.map((d,i)=>d.actual>0?ce("circle",{key:"dot"+i,cx:xp(i).toFixed(1),cy:yp(d.actual).toFixed(1),r:3,fill:color||"#9BB5C8",stroke:"#fff",strokeWidth:1.5}):null).filter(Boolean),
       data.filter((_,i)=>i%step===0).map((d,i)=>ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:CH+16,textAnchor:"middle",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},d.date)),
       [0,Math.round(maxV/3),Math.round(maxV*2/3),maxV].map((v,i)=>ce("text",{key:"y"+i,x:pL-4,y:yp(v)+3,textAnchor:"end",fontSize:9,fill:"#C4C1BA",fontFamily:"system-ui"},v+"%"))
     ),
@@ -138,14 +146,60 @@ function computeProgress(updates,schedules,gid){
 function computeChart(updates,schedules,gid,filterFloor){
   const grpUpd=(updates[gid]||[]).filter(u=>!filterFloor||u.floor===filterFloor);
   const sched=schedules[gid]||{};
-  const dates=[...new Set(grpUpd.map(u=>u.date))].sort();
-  const base=dates[0]||TODAY;const floors=filterFloor?[filterFloor]:FLOORS;const data=[];
-  for(let i=0;i<=diffD(base,fmt(addD(new Date(),35)));i++){
-    const date=fmt(addD(new Date(base),i)),isPast=date<=TODAY;
-    let planned=0;floors.forEach(fl=>{const sc=sched[fl];if(!sc||date<sc.startDate)return;const el=Math.max(0,diffD(sc.startDate,date));const td=Math.max(1,diffD(sc.startDate,sc.endDate));planned+=(el/td)*100;});
-    const entry={date:date.slice(5),planned:Math.round(floors.length>0?planned/floors.length:0)};
-    if(isPast){const acc={};grpUpd.filter(u=>u.date<=date).forEach(u=>{const k=`${u.floor}_${u.room}_${u.environment||"A"}`;acc[k]=(acc[k]||0)+(u.actualPct||0);});const vals=Object.values(acc).map(v=>Math.min(100,v));entry.actual=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;}
-    if(!isPast&&dates.length>=2){const la=data.filter(d=>d.actual!==undefined);if(la.length>=2){const v=la[la.length-1].actual,r=v/Math.max(1,diffD(dates[0],TODAY));entry.trend=Math.min(100,Math.round(v+r*diffD(TODAY,date)));}}
+  const floors=filterFloor?[filterFloor]:FLOORS;
+
+  // Start from earliest schedule date (gives context for planned curve)
+  let earliestStart=TODAY;
+  floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&sc.startDate<earliestStart)earliestStart=sc.startDate;});
+  // Chart window: from schedule start to today+40 days
+  const chartStart=earliestStart;
+  const chartEnd=fmt(addD(new Date(),40));
+  const totalDays=Math.max(2,diffD(chartStart,chartEnd));
+
+  const data=[];
+  for(let i=0;i<=totalDays;i++){
+    const date=fmt(addD(new Date(chartStart),i));
+    const isPast=date<=TODAY;
+
+    // Planned: weighted average across floors that have started
+    let planned=0,activeFloors=0;
+    floors.forEach(fl=>{
+      const sc=sched[fl];
+      if(!sc?.startDate||!sc?.endDate)return;
+      activeFloors++;
+      if(date<sc.startDate)return; // not started yet
+      const el=Math.max(0,diffD(sc.startDate,date));
+      const td=Math.max(1,diffD(sc.startDate,sc.endDate));
+      planned+=Math.min(100,(el/td)*100);
+    });
+    const entry={date:date.slice(5),planned:Math.round(activeFloors>0?planned/activeFloors:0)};
+
+    // Actual: cumulative progress up to this date (0 if no updates yet)
+    if(isPast){
+      const acc={};
+      grpUpd.filter(u=>u.date<=date).forEach(u=>{
+        const k=`${u.floor}_${u.room}_${u.environment||"A"}`;
+        acc[k]=(acc[k]||0)+(u.actualPct||0);
+      });
+      const vals=Object.values(acc).map(v=>Math.min(100,v));
+      // Count all expected units for denominator (total rooms across floors with schedules)
+      let totalUnits=0;
+      floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&date>=sc.startDate)totalUnits+=sc.roomCount||12;});
+      entry.actual=totalUnits>0
+        ?Math.round(vals.reduce((a,b)=>a+b,0)/totalUnits)
+        :(vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0);
+    }
+
+    // Trend: extrapolate from accumulated actual (works with 1+ real points)
+    if(!isPast){
+      const lastActuals=data.filter(d=>d.actual!==undefined);
+      if(lastActuals.length>=1){
+        const lastVal=lastActuals[lastActuals.length-1].actual;
+        const daysElapsed=Math.max(1,diffD(chartStart,TODAY)+1);
+        const rate=lastVal/daysElapsed;
+        entry.trend=Math.min(100,Math.round(lastVal+rate*diffD(TODAY,date)));
+      }
+    }
     data.push(entry);
   }
   return data;
