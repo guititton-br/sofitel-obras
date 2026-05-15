@@ -293,7 +293,7 @@ function GroupDashboard({grp,updates,schedules,setTab}){
   const [selFloor,setSelFloor]=useState(null);
   const [selRoom,setSelRoom]=useState(null);
   const progress=useMemo(()=>computeProgress(updates,schedules,grp.id),[updates,schedules,grp.id]);
-  const chartData=useMemo(()=>computeChart(updates,schedules,grp.id,null),[updates,schedules,grp.id]);
+  const chartData=useMemo(()=>computeChart(updates,schedules,grp.id,selFloor),[updates,schedules,grp.id,selFloor]);
   const {totals,floorStats}=progress;
   const grpUpd=updates[grp.id]||[];
   const avgPct=totals.total>0?Math.round(totals.sumPct/totals.total):0;
@@ -303,7 +303,7 @@ function GroupDashboard({grp,updates,schedules,setTab}){
   const flSc=selFloor?(schedules[grp.id]||{})[selFloor]||{}:{};
   const flRooms=selFloor?parseRooms(flSc):[];
   const acc=selFloor?(progress.acc[selFloor]||{}):{};
-  const floorChartData=useMemo(()=>selFloor?computeChart(updates,schedules,grp.id,selFloor):null,[updates,schedules,grp.id,selFloor]);
+  // floorChart now handled by main chartData (reactive to selFloor)
 
   const roomData=flRooms.map(r=>{
     const envs=acc[r]||{};const ek=Object.keys(envs);
@@ -327,22 +327,27 @@ function GroupDashboard({grp,updates,schedules,setTab}){
         ce("div",{style:{fontSize:10,color:"#B8B5AD"}},k.s)
       ))
     ),
-    // Chart
+    // Chart — reacts to selFloor
     ce("div",{style:{...S.card,marginBottom:14,padding:"16px 20px"}},
-      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        ce("div",{style:{display:"flex",alignItems:"center",gap:10}},
-          ce("p",{style:{...S.h2,margin:0}},"Avanço % · Cronograma e Tendência"),
-          ce("span",{style:{...S.badge(ovSt.color),fontSize:9}},ovSt.label)
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+        ce("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+          ce("p",{style:{...S.h2,margin:0}},selFloor?"Avanço % · "+selFloor+"° Pavimento":"Avanço % · Todos os Andares"),
+          ce("span",{style:{...S.badge(ovSt.color),fontSize:9}},ovSt.label),
+          selFloor&&ce("button",{style:{...S.btnS,fontSize:10,padding:"3px 10px"},onClick:()=>{setSelFloor(null);setSelRoom(null);}},"← Ver geral")
         ),
         ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 12px"},onClick:()=>setTab("update")},"+ Registrar avanço")
       ),
+      ce("p",{style:{fontSize:10,color:"#B8B5AD",marginBottom:10}},selFloor?"Gráfico filtrado pelo "+selFloor+"° Pavimento — clique em outro andar ou em '← Ver geral' para mudar":"Clique em um card de andar para filtrar o gráfico por pavimento"),
       ce(LineChart,{data:chartData,color:grp.color,h:260})
     ),
     // Floor grid
     ce("div",{style:S.card},
       ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
-        ce("p",{style:{...S.h2,margin:0}},"Pavimentos — Clique para detalhar"),
-        selFloor&&ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 10px"},onClick:()=>{setSelFloor(null);setSelRoom(null);}},"x Fechar")
+        ce("div",null,
+          ce("p",{style:{...S.h2,margin:0}},"Pavimentos"),
+          ce("p",{style:{fontSize:10,color:"#B8B5AD",marginTop:2}},selFloor?"Filtrando gráfico pelo "+selFloor+"° Pavimento · Clique novamente para voltar à visão geral":"Clique em um andar para filtrar o gráfico e ver detalhes")
+        ),
+        selFloor&&ce("button",{style:{...S.btnS,fontSize:11,padding:"5px 10px"},onClick:()=>{setSelFloor(null);setSelRoom(null);}},"← Todos os andares")
       ),
       ce("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:selFloor?16:0}},
         FLOORS.map(fl=>{
@@ -404,10 +409,7 @@ function GroupDashboard({grp,updates,schedules,setTab}){
             })
           )
         ),
-        floorChartData&&ce("div",{style:S.card},
-          ce("p",{style:S.h2},"Grafico — "+selFloor+"° Pavimento"),
-          ce(LineChart,{data:floorChartData,color:grp.color,h:200})
-        )
+
       )
     )
   );
