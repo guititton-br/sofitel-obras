@@ -805,7 +805,7 @@ function App(){
       )
     ),
     // Main
-    ce("main",{style:{flex:1,overflow:"auto",padding:"28px 32px",background:"#F7F8FA"}}),
+    ce("main",{style:{flex:1,overflow:"auto",padding:"28px 32px",background:"#F7F8FA"}},
       !connected&&ce("div",{style:{background:"#FBF0F0",border:"1px solid #E8C4C4",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:12,color:"#C48282",fontWeight:600}},"Sem conexao com Firebase"),
       selectedGroup&&curGrp?ce("div",null,
         ce("div",{style:{marginBottom:18}},
@@ -836,7 +836,7 @@ function App(){
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(ce(App));
+try{ReactDOM.createRoot(document.getElementById("root")).render(ce(App));}catch(err){document.getElementById("root").innerHTML='<div style="padding:40px;font-family:monospace;color:red;background:#fff"><h3>Erro React:</h3><pre>'+err.message+'\n\n'+err.stack+'</pre></div>';document.getElementById("splash")?.remove();}
 </script>
 </body>
 </html>
