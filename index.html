@@ -340,13 +340,65 @@ function getUT(grpUpd,floor,room,env,dpu){
 
 function getFloorTeams(companies,floor){return(companies||[]).flatMap(co=>co.teams.filter(t=>(t.assignedFloors||[]).includes(floor)).map(t=>({...t,coName:co.name,coColor:co.color})));}
 
+// Delivery date for room at index on a floor
+function getDeliveryDate(startDate,roomIndex,dpu){
+  if(!startDate)return null;
+  return fmt(addD(new Date(startDate),(roomIndex+1)*Math.max(1,dpu)));
+}
+
+// Today's scheduled deliveries for a group
+function getTodayDeliveries(grp,updates,schedules,date){
+  const sched=schedules[grp.id]||{},grpUpd=updates[grp.id]||[];
+  const deliveries=[];
+  (grp.companies||[]).forEach(co=>co.teams.forEach(t=>(t.assignedFloors||[]).forEach(fl=>{
+    const sc=sched[fl];if(!sc?.startDate)return;
+    const rooms=parseRooms(sc);
+    rooms.forEach((room,idx)=>{
+      const dd=getDeliveryDate(sc.startDate,idx,t.dpu||3);
+      if(dd===date){
+        const already=grpUpd.find(u=>u.floor===fl&&u.room===room&&u.entregaDia&&u.date===date);
+        if(!already)deliveries.push({floor:fl,room,teamId:t.id,coName:co.name,teamName:t.name,envName:grp.envName||"Ambiente",dd});
+      }
+    });
+  })));
+  return deliveries;
+}
+
+// Upcoming deliveries (next N days)
+function getUpcomingDeliveries(grp,updates,schedules,days){
+  const sched=schedules[grp.id]||{},grpUpd=updates[grp.id]||[];
+  const upcoming=[];
+  for(let d=0;d<=days;d++){
+    const date=fmt(addD(new Date(),d));
+    const dels=getTodayDeliveries(grp,updates,schedules,date);
+    dels.forEach(dl=>upcoming.push({...dl,daysUntil:d,date}));
+  }
+  return upcoming.slice(0,10);
+}
+
+// Check if group has accumulated delay
+function hasAccumulatedDelay(grp,updates){
+  const grpUpd=updates[grp.id]||[];
+  return grpUpd.some(u=>u.efeitoImpacto===true)||grpUpd.some(u=>u.entregaDia&&!u.entregue);
+}
+
+// Get efetivo previsto for a team
+function getEfetivoPrevisto(companies,teamId){
+  for(const co of(companies||[])){for(const t of co.teams){if(t.id===teamId)return t.people||1;}}
+  return 1;
+}
+
 // ══════════ GROUP DASHBOARD ══════════
 function GroupDashboard({grp,updates,schedules,setTab}){
   const companies=grp.companies||[];
   const [selFloor,setSelFloor]=useState(null);
+  const [selFloors,setSelFloors]=useState([]); // multi-select
+  const togFloor=fl=>{setSelFloors(p=>p.includes(fl)?p.filter(f=>f!==fl):[...p,fl]);setSelFloor(null);};
+  const clearFloors=()=>{setSelFloors([]);setSelFloor(null);};
+  const activeFloors=selFloors.length>0?selFloors:null;
   const [selRoom,setSelRoom]=useState(null);
   const progress=useMemo(()=>computeProgress(updates,schedules,grp.id),[updates,schedules,grp.id]);
-  const chartData=useMemo(()=>computeChart(updates,schedules,grp.id,selFloor),[updates,schedules,grp.id,selFloor]);
+  const chartData=useMemo(()=>computeChart(updates,schedules,grp.id,selFloors.length===1?selFloors[0]:selFloor),[updates,schedules,grp.id,selFloor,selFloors]);
   const {totals,floorStats}=progress;
   const grpUpd=updates[grp.id]||[];
   const avgPct=totals.total>0?Math.round(totals.sumPct/totals.total):0;
@@ -389,7 +441,7 @@ function GroupDashboard({grp,updates,schedules,setTab}){
     ce("div",{style:{...S.card,marginBottom:14,padding:"16px 20px"}},
       ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
         ce("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
-          ce("p",{style:{...S.h2,margin:0}},selFloor?"Avanço % · "+selFloor+"° Pavimento":"Avanço % · Todos os Andares"),
+          ce("p",{style:{...S.h2,margin:0}},selFloors.length>0?"Avanço % · "+selFloors.join("°, ")+"°":selFloor?"Avanço % · "+selFloor+"° Pavimento":"Avanço % · Todos os Andares"),
           ce("span",{style:{...S.badge(ovSt.color),fontSize:9}},ovSt.label),
           selFloor&&ce("button",{style:{...S.btnS,fontSize:10,padding:"3px 10px"},onClick:()=>{setSelFloor(null);setSelRoom(null);}},"← Ver geral")
         ),
@@ -413,7 +465,7 @@ function GroupDashboard({grp,updates,schedules,setTab}){
           const st=getStatus(s.actualPct,s.plannedPct,s.doneRooms>=s.roomCount&&s.roomCount>0);
           const co=companies.find(c=>c.teams.some(t=>(t.assignedFloors||[]).includes(fl)));
           const isSel=selFloor===fl;
-          return ce("div",{key:fl,onClick:()=>{setSelFloor(isSel?null:fl);setSelRoom(null);},style:{borderRadius:10,padding:"10px 12px",background:isSel?"#fff":st.bg,border:`${isSel?2:1}px solid ${isSel?st.color:(st.pill||st.bg)}`,cursor:"pointer",transition:"all .15s"}},
+          return ce("div",{key:fl,onClick:()=>{setSelRoom(null);togFloor(fl);},style:{borderRadius:10,padding:"10px 12px",background:(isSel||selFloors.includes(fl))?"#fff":st.bg,border:`${isSel?2:1}px solid ${isSel?st.color:(st.pill||st.bg)}`,cursor:"pointer",transition:"all .15s"}},
             ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
               ce("span",{style:{fontWeight:700,fontSize:14,color:"#1A1D23"}},fl+"°"),
               ce("span",{style:{fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:10,background:st.color+"33",color:st.color}},st.label)
@@ -476,93 +528,225 @@ function GroupDashboard({grp,updates,schedules,setTab}){
 // ══════════ GROUP UPDATE ══════════
 function GroupUpdate({grp,updates,onPushUpdate,schedules,showToast}){
   const companies=grp.companies||[];
-  const sched=schedules[grp.id]||{},grpUpd=updates[grp.id]||[];
+  const grpUpd=updates[grp.id]||[];
   const allTeams=companies.flatMap(co=>co.teams.map(t=>({...t,coName:co.name,coColor:co.color})));
-  const [form,setForm]=useState({date:TODAY,floor:5,room:"",environment:"",teamId:""});
-  const [hitTarget,setHitTarget]=useState(null);
-  const [actualPct,setActualPct]=useState("");
-  const [cause,setCause]=useState("");
-  const flSc=sched[form.floor]||{};
-  const roomList=parseRooms(flSc);
-  const selTeam=allTeams.find(t=>t.id===form.teamId)||allTeams[0];
-  const dpu=selTeam?.dpu||3;
-  const room=form.room||roomList[0]||1;
-  const env=form.environment||grp.envName||"Ambiente";
-  const unitInfo=useMemo(()=>getUT(grpUpd,form.floor,room,env,dpu),[grpUpd,form.floor,room,env,dpu]);
-  const knownEnvs=useMemo(()=>[...new Set(grpUpd.map(u=>u.environment).filter(Boolean))],[grpUpd]);
-  const reset=()=>{setHitTarget(null);setActualPct("");setCause("");};
-  const hc=(f,v)=>{setForm(p=>({...p,[f]:v}));if(f!=="date"&&f!=="teamId")reset();};
-  const hh=v=>{setHitTarget(v);if(v){setActualPct(String(unitInfo.target));setCause("");}else setActualPct("");};
-  const canSave=hitTarget===true||(hitTarget===false&&actualPct!==""&&cause!=="");
-  const submit=async()=>{
-    const ap=hitTarget?unitInfo.target:Math.min(unitInfo.remaining,Math.max(0,+actualPct));
-    await onPushUpdate(grp.id,{id:`u${Date.now()}`,date:form.date,floor:form.floor,room,environment:env,teamId:form.teamId||allTeams[0]?.id||"",targetPct:unitInfo.target,actualPct:ap,hitTarget:hitTarget===true,cause:hitTarget?null:cause,ts:Date.now()});
-    reset();showToast("Avanco registrado!");
+  const [date,setDate]=useState(TODAY);
+  const [teamId,setTeamId]=useState(allTeams[0]?.id||"");
+  const [step,setStep]=useState("efetivo"); // efetivo | impacto | recuperacao | entrega | pendencias | done
+  const [efeivoReal,setEfeivoReal]=useState(null);
+  const [efeitoImpacto,setEfeitoImpacto]=useState(null);
+  const [recuperacao,setRecuperacao]=useState(null);
+  const [deliveries,setDeliveries]=useState([]);
+  const [delIdx,setDelIdx]=useState(0);
+  const [entregue,setEntregue]=useState(null);
+  const [pendencias,setPendencias]=useState("");
+  const [motivo,setMotivo]=useState("");
+  const [savedSteps,setSavedSteps]=useState([]);
+
+  const selTeam=allTeams.find(t=>t.id===teamId)||allTeams[0];
+  const previsto=selTeam?.people||1;
+  const hasPendingDelay=hasAccumulatedDelay(grp,updates);
+  const todayDels=getTodayDeliveries(grp,updates,schedules,date);
+  const upcoming=getUpcomingDeliveries(grp,updates,schedules,5);
+
+  const reset=()=>{setStep("efetivo");setEfeivoReal(null);setEfeitoImpacto(null);setRecuperacao(null);setDeliveries([]);setDelIdx(0);setEntregue(null);setPendencias("");setMotivo("");setSavedSteps([]);};
+
+  const saveAndNext=async(extraData)=>{
+    const base={id:`u${Date.now()}`,date,teamId:teamId||allTeams[0]?.id||"",ts:Date.now(),...extraData};
+    await onPushUpdate(grp.id,base);
+    setSavedSteps(p=>[...p,base]);
   };
 
-  return ce("div",{style:S.g2},
-    ce("div",{style:{display:"flex",flexDirection:"column",gap:14}},
-      ce("div",{style:S.card},
-        ce("p",{style:S.h3},"Identificacao"),
-        ce("div",{style:{...S.g2,marginBottom:10}},
-          ce("div",null,ce("label",{style:S.lbl},"Data"),ce("input",{style:S.inp,type:"date",value:form.date,onChange:e=>hc("date",e.target.value)})),
-          allTeams.length>0?ce("div",null,ce("label",{style:S.lbl},"Equipe"),ce("select",{style:S.inp,value:form.teamId||allTeams[0]?.id||"",onChange:e=>hc("teamId",e.target.value)},allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" - "+t.name+" ("+t.dpu+"d/amb)")))):ce("div",null,ce("div",{style:{fontSize:11,color:"#C4A882",padding:"8px 11px",background:"#FAF6F0",borderRadius:8,border:"1px solid #E8C88A"}},"Cadastre equipes na aba Equipes"))
-        ),
-        ce("div",{style:S.g3},
-          ce("div",null,ce("label",{style:S.lbl},"Pavimento"),ce("select",{style:S.inp,value:form.floor,onChange:e=>hc("floor",+e.target.value)},FLOORS.map(f=>ce("option",{key:f,value:f},f+"° Pavimento")))),
-          ce("div",null,ce("label",{style:S.lbl},"Quarto"),ce("select",{style:S.inp,value:room,onChange:e=>hc("room",e.target.value)},roomList.map(r=>ce("option",{key:r,value:r},"Quarto "+r)))),
-          ce("div",null,ce("label",{style:S.lbl},"Ambiente (livre)"),ce("input",{style:S.inp,list:"el",value:form.environment,onChange:e=>hc("environment",e.target.value),placeholder:grp.envName||"Banheiro..."}),ce("datalist",{id:"el"},knownEnvs.map(e=>ce("option",{key:e,value:e}))))
-        )
+  const handleEfetivo=async(real)=>{
+    setEfeivoReal(real);
+    if(real<previsto){setStep("impacto");}
+    else{
+      await saveAndNext({tipo:"efetivo",efetivoPrevisto:previsto,efeivoReal:real,efeitoImpacto:false});
+      hasPendingDelay?setStep("recuperacao"):todayDels.length>0?(setDeliveries(todayDels),setStep("entrega")):setStep("done");
+    }
+  };
+
+  const handleImpacto=async(imp)=>{
+    setEfeitoImpacto(imp);
+    await saveAndNext({tipo:"efetivo",efetivoPrevisto:previsto,efeivoReal,efeitoImpacto:imp});
+    hasPendingDelay?setStep("recuperacao"):todayDels.length>0?(setDeliveries(todayDels),setStep("entrega")):setStep("done");
+  };
+
+  const handleRecuperacao=async(rec)=>{
+    setRecuperacao(rec);
+    await saveAndNext({tipo:"recuperacao",recuperacao:rec});
+    todayDels.length>0?(setDeliveries(todayDels),setStep("entrega")):setStep("done");
+  };
+
+  const handleEntrega=async(ent)=>{
+    setEntregue(ent);
+    if(ent)setStep("pendencias");
+    else setStep("motivo");
+  };
+
+  const handlePendencias=async()=>{
+    const dl=deliveries[delIdx];
+    await saveAndNext({tipo:"entrega",floor:dl.floor,room:dl.room,entregaDia:true,entregue:true,pendencias});
+    nextDelivery();
+  };
+
+  const handleMotivo=async()=>{
+    if(!motivo)return;
+    const dl=deliveries[delIdx];
+    await saveAndNext({tipo:"entrega",floor:dl.floor,room:dl.room,entregaDia:true,entregue:false,motivo});
+    nextDelivery();
+  };
+
+  const nextDelivery=()=>{
+    if(delIdx+1<deliveries.length){setDelIdx(p=>p+1);setEntregue(null);setPendencias("");setMotivo("");setStep("entrega");}
+    else setStep("done");
+  };
+
+  const stepN={"efetivo":1,"impacto":2,"recuperacao":hasPendingDelay?2:null,"entrega":hasPendingDelay?3:2,"pendencias":hasPendingDelay?4:3,"motivo":hasPendingDelay?4:3,"done":hasPendingDelay?5:4};
+  const totalSteps=hasPendingDelay?(todayDels.length>0?5:3):(todayDels.length>0?4:2);
+
+  const stepLabel={"efetivo":"Efetivo","impacto":"Impacto","recuperacao":"Recuperação","entrega":"Entrega","pendencias":"Pendências","motivo":"Motivo","done":"Concluído"};
+  const pct=Math.round(((stepN[step]||1)-1)/totalSteps*100);
+
+  const BIG_BTN=(label,onClick,color,bg)=>ce("button",{onClick,style:{flex:1,padding:"14px 8px",borderRadius:12,border:`2px solid ${color}`,background:bg||"#fff",color,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s"}},label);
+
+  return ce("div",{style:{maxWidth:620,margin:"0 auto"}},
+    // Header
+    ce("div",{style:{...S.card,marginBottom:16}},
+      ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        ce("div",{style:{fontSize:16,fontWeight:700,color:"#16181D"}},"Atualização Diária"),
+        step!=="done"&&ce("button",{onClick:reset,style:{...S.btnS,fontSize:11,padding:"4px 10px"}},"Reiniciar")
       ),
-      ce("div",{style:{...S.card,border:`1.5px solid ${grp.color}22`,background:grp.color+"06"}},
-        unitInfo.done?ce("div",{style:{textAlign:"center",padding:"12px 0"}},ce("div",{style:{fontSize:24,marginBottom:6}},"✓"),ce("div",{style:{fontWeight:700,color:"#7AAE90",fontSize:14}},"Ambiente concluido!"),ce("div",{style:{fontSize:11,color:"#9BA3B8",marginTop:2}},"Q"+room+" - "+env+" no "+form.floor+"° completo"))
-        :ce("div",null,
-          ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
-            ce("div",null,ce("div",{style:{fontSize:10,color:"#9BA3B8",marginBottom:2}},"Meta de hoje - Q"+room+" - "+env),ce("div",{style:{fontSize:32,fontWeight:800,color:grp.color,lineHeight:1}},unitInfo.target+"%"),unitInfo.carryover>0&&ce("div",{style:{fontSize:10,color:"#C4A882",marginTop:2}},"+"+unitInfo.carryover+"% de atraso anterior")),
-            ce("div",{style:{textAlign:"right"}},ce("div",{style:{fontSize:10,color:"#9BA3B8"}},"Executado"),ce("div",{style:{fontSize:22,fontWeight:700,color:grp.color}},unitInfo.accumulated+"%"),ce("div",{style:{fontSize:10,color:"#9BA3B8"}},"Restante: "+unitInfo.remaining+"%"))
-          ),
-          ce("div",{style:{background:"#E4E8F2",borderRadius:6,height:8,marginBottom:14}},ce("div",{style:{width:unitInfo.accumulated+"%",background:grp.color,height:8,borderRadius:6}})),
-          ce("p",{style:{...S.h3,marginBottom:10}},"A meta foi atingida hoje?"),
-          ce("div",{style:{display:"flex",gap:10,marginBottom:hitTarget===false?14:0}},
-            ce("button",{onClick:()=>hh(true),style:{flex:1,padding:"11px",borderRadius:10,border:`2px solid ${hitTarget===true?"#7AAE90":"#E4E8F2"}`,background:hitTarget===true?"#7AAE90":"#fff",color:hitTarget===true?"#fff":"#5A6070",fontSize:13,fontWeight:700}},"✓  Sim, atingida"),
-            ce("button",{onClick:()=>hh(false),style:{flex:1,padding:"11px",borderRadius:10,border:`2px solid ${hitTarget===false?"#C48282":"#E4E8F2"}`,background:hitTarget===false?"#C48282":"#fff",color:hitTarget===false?"#fff":"#5A6070",fontSize:13,fontWeight:700}},"x  Nao, parcial")
-          ),
-          hitTarget===false&&ce("div",{style:{background:"#FBF0F0",borderRadius:10,padding:"12px",border:"1px solid #F0D0D0"}},
-            ce("div",{style:{...S.g2,marginBottom:10}},
-              ce("div",null,ce("label",{style:{...S.lbl,color:"#C48282"}},"Executado hoje (%)"),ce("input",{style:{...S.inp,borderColor:"#E8C4C4"},type:"number",min:"0",max:unitInfo.remaining,placeholder:"ex: 20",value:actualPct,onChange:e=>setActualPct(e.target.value)})),
-              actualPct&&ce("div",{style:{display:"flex",flexDirection:"column",justifyContent:"flex-end"}},ce("div",{style:{fontSize:10,color:"#C4A882"}},"Atraso do dia"),ce("div",{style:{fontSize:20,fontWeight:700,color:"#C48282"}},(unitInfo.target-Math.min(unitInfo.target,+actualPct||0))+"%"),ce("div",{style:{fontSize:10,color:"#9BA3B8"}},"-> carrega amanha"))
-            ),
-            ce("label",{style:{...S.lbl,color:"#C48282"}},"Causa"),
-            ce("select",{style:{...S.inp,borderColor:"#E8C4C4"},value:cause,onChange:e=>setCause(e.target.value)},ce("option",{value:""},"- Selecione -"),DELAY_CAUSES.map(c=>ce("option",{key:c,value:c},c)))
-          ),
-          hitTarget!==null&&ce("button",{style:{...S.btnP,width:"100%",padding:"12px",fontSize:13,marginTop:12,opacity:canSave?1:.4},onClick:submit,disabled:!canSave},"Registrar Avanco")
+      ce("div",{style:{...S.g2}},
+        ce("div",null,ce("label",{style:S.lbl},"Data"),ce("input",{style:S.inp,type:"date",value:date,onChange:e=>setDate(e.target.value)})),
+        allTeams.length>0?ce("div",null,ce("label",{style:S.lbl},"Equipe"),ce("select",{style:S.inp,value:teamId||allTeams[0]?.id,onChange:e=>setTeamId(e.target.value)},allTeams.map(t=>ce("option",{key:t.id,value:t.id},t.coName+" · "+t.name)))):
+        ce("div",null,ce("div",{style:{padding:"10px 12px",background:"#FEF9E8",borderRadius:8,fontSize:11,color:"#B8895A"}},"Cadastre equipes primeiro"))
+      ),
+      // Progress bar
+      step!=="done"&&ce("div",{style:{marginTop:12}},
+        ce("div",{style:{display:"flex",justifyContent:"space-between",fontSize:10,color:"#94A3B8",marginBottom:4}},
+          ce("span",null,stepLabel[step]),
+          ce("span",null,"Passo "+(stepN[step]||1)+" de "+totalSteps)
+        ),
+        ce("div",{style:{background:"#E8ECF4",borderRadius:6,height:5}},
+          ce("div",{style:{width:pct+"%",background:grp.color||"#6366F1",height:5,borderRadius:6,transition:"width .4s ease"}})
         )
       )
     ),
-    ce("div",{style:{display:"flex",flexDirection:"column",gap:14}},
-      ce("div",{style:S.card},
-        ce("p",{style:S.h3},"Q"+room+" - Ambientes registrados"),
-        (()=>{
-          const envMap=grpUpd.filter(u=>u.floor===form.floor&&String(u.room)===String(room)).reduce((a,u)=>{const e=u.environment||"Amb";a[e]=(a[e]||0)+(u.actualPct||0);return a;},{});
-          return Object.keys(envMap).length===0?ce("p",{style:{color:"#9BA3B8",fontSize:12}},"Nenhum ambiente registrado ainda."):
-          Object.entries(envMap).map(([e,p])=>{const pct=Math.min(100,Math.round(p));const st=getStatus(pct,50,pct>=100);return ce("div",{key:e,style:{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#FAFBFD",borderRadius:8,border:"1px solid #EDEBE6",marginBottom:6}},
-            ce("span",{style:{fontSize:12,fontWeight:600,flex:1}},e),
-            ce("div",{style:{flex:2,background:"#E4E8F2",borderRadius:3,height:5}},ce("div",{style:{width:pct+"%",background:st.color,height:5,borderRadius:3}})),
-            ce("span",{style:{fontSize:11,fontWeight:700,color:st.color,minWidth:34,textAlign:"right"}},pct+"%")
-          );});
-        })()
+
+    // ── STEP: EFETIVO ──
+    step==="efetivo"&&ce("div",{style:S.card},
+      ce("div",{style:{textAlign:"center",marginBottom:20}},
+        ce("div",{style:{fontSize:13,color:"#64748B",marginBottom:4}}),"Equipe "+(selTeam?.coName||"")+" · "+(selTeam?.name||""),
+        ce("div",{style:{fontSize:24,fontWeight:700,color:"#16181D",marginBottom:2}},"Quantas pessoas vieram hoje?"),
+        ce("div",{style:{fontSize:13,color:"#94A3B8"}},"Previsto: ",ce("b",{style:{color:"#16181D"}},previsto)," pessoas")
       ),
-      ce("div",{style:S.card},
-        ce("p",{style:S.h3},"Ultimos Registros"),
-        grpUpd.length===0?ce("p",{style:{color:"#9BA3B8",fontSize:12}},"Nenhum registro ainda."):
-        [...grpUpd].reverse().slice(0,7).map(u=>{
-          const co=companies.find(c=>c.teams.some(t=>t.id===u.teamId));const gap=(u.targetPct||0)-(u.actualPct||0);
-          return ce("div",{key:u.id||u.ts,style:{padding:"7px 0",borderBottom:"1px solid #F5F4F1",fontSize:11}},
-            ce("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:2}},ce("span",{style:{fontWeight:700,color:"#1A1D23"}},u.date+" - "+u.floor+"° Q"+u.room+" - "+(u.environment||"?")),ce("span",{style:{fontWeight:700,color:u.hitTarget?"#7AAE90":"#C48282"}},(u.actualPct||0)+"%")),
-            ce("div",{style:{display:"flex",gap:8}},u.hitTarget?ce("span",{style:{color:"#7AAE90"}},"✓ Meta"):ce("span",{style:{color:"#C48282"}},"x D"+gap+"%"),u.cause&&ce("span",{style:{color:"#C4A882"}},"- "+u.cause),co&&ce("span",{style:S.badge(co.color)},co.name))
-          );
-        })
+      ce("div",{style:{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center",marginBottom:8}},
+        Array.from({length:Math.max(previsto+2,6)},(_,i)=>i+1).map(n=>
+          ce("button",{key:n,onClick:()=>handleEfetivo(n),style:{
+            width:56,height:56,borderRadius:14,border:`2px solid ${n===previsto?"#3B82F6":n<previsto?"#F87171":"#E2E8F0"}`,
+            background:n===previsto?"#EFF6FF":n<previsto?"#FEF2F2":"#fff",
+            color:n===previsto?"#1D4ED8":n<previsto?"#DC2626":"#374151",
+            fontSize:22,fontWeight:700,cursor:"pointer"
+          }},n)
+        )
+      ),
+      ce("p",{style:{textAlign:"center",fontSize:11,color:"#94A3B8"}}),"Azul = previsto · Vermelho = abaixo"
+    ),
+
+    // ── STEP: IMPACTO ──
+    step==="impacto"&&ce("div",{style:{...S.card,border:"1.5px solid #FCA5A5"}},
+      ce("div",{style:{textAlign:"center",marginBottom:24}},
+        ce("div",{style:{fontSize:36,marginBottom:8}},"⚠️"),
+        ce("div",{style:{fontSize:20,fontWeight:700,color:"#16181D",marginBottom:6}}),(previsto-efeivoReal)+" pessoa(s) faltaram",
+        ce("div",{style:{fontSize:14,color:"#64748B"}},"O avanço da obra foi impactado hoje?")
+      ),
+      ce("div",{style:{display:"flex",gap:12}},
+        BIG_BTN("✓  Não impactou","#2D8A5F","#F0FAF5"),
+        BIG_BTN("✗  Sim, impactou","#C05050","#FEF0F0")
+      ),
+      ce("p",{style:{textAlign:"center",fontSize:11,color:"#94A3B8",marginTop:10}}),"Se não impactou o app mantém o plano original"
+    ),
+
+    // ── STEP: RECUPERAÇÃO ──
+    step==="recuperacao"&&ce("div",{style:{...S.card,border:"1.5px solid #FDE68A"}},
+      ce("div",{style:{textAlign:"center",marginBottom:24}},
+        ce("div",{style:{fontSize:36,marginBottom:8}},"📈"),
+        ce("div",{style:{fontSize:20,fontWeight:700,color:"#16181D",marginBottom:6}}),"Há atraso acumulado",
+        ce("div",{style:{fontSize:14,color:"#64748B"}}),"A equipe recuperou, manteve ou piorou o ritmo esta semana?"
+      ),
+      ce("div",{style:{display:"flex",gap:10}},
+        ce("button",{onClick:()=>handleRecuperacao("recuperou"),style:{flex:1,padding:"14px 8px",borderRadius:12,border:"2px solid #2D8A5F",background:"#F0FAF5",color:"#2D8A5F",fontSize:12,fontWeight:700,cursor:"pointer"}},ce("div",null,"✅"),ce("div",null,"Recuperou")),
+        ce("button",{onClick:()=>handleRecuperacao("manteve"),style:{flex:1,padding:"14px 8px",borderRadius:12,border:"2px solid #2A7AB8",background:"#EFF6FF",color:"#2A7AB8",fontSize:12,fontWeight:700,cursor:"pointer"}},ce("div",null,"➡"),ce("div",null,"Manteve")),
+        ce("button",{onClick:()=>handleRecuperacao("piorou"),style:{flex:1,padding:"14px 8px",borderRadius:12,border:"2px solid #C05050",background:"#FEF0F0",color:"#C05050",fontSize:12,fontWeight:700,cursor:"pointer"}},ce("div",null,"⬇"),ce("div",null,"Piorou"))
       )
+    ),
+
+    // ── STEP: ENTREGA ──
+    step==="entrega"&&deliveries[delIdx]&&ce("div",{style:{...S.card,border:`1.5px solid ${grp.color||"#6366F1"}22`}},
+      ce("div",{style:{textAlign:"center",marginBottom:20}},
+        ce("div",{style:{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:20,background:grp.color+"15",fontSize:11,fontWeight:600,color:grp.color,marginBottom:10}},"📅 Entrega programada hoje"),
+        ce("div",{style:{fontSize:22,fontWeight:700,color:"#16181D",marginBottom:4}}),deliveries[delIdx].envName+" "+deliveries[delIdx].room+" · "+deliveries[delIdx].floor+"° andar",
+        ce("div",{style:{fontSize:13,color:"#64748B"}}),deliveries[delIdx].coName+" · "+deliveries[delIdx].teamName,
+        deliveries.length>1&&ce("div",{style:{fontSize:11,color:"#94A3B8",marginTop:4}}),(delIdx+1)+" de "+deliveries.length+" entregas hoje"
+      ),
+      ce("div",{style:{fontSize:18,fontWeight:600,color:"#16181D",textAlign:"center",marginBottom:16}}),"Foi concluído?",
+      ce("div",{style:{display:"flex",gap:12}},
+        BIG_BTN("✅  Sim, entregue",()=>handleEntrega(true),"#2D8A5F","#F0FAF5"),
+        BIG_BTN("❌  Não foi",()=>handleEntrega(false),"#C05050","#FEF0F0")
+      )
+    ),
+
+    // ── STEP: PENDÊNCIAS ──
+    step==="pendencias"&&ce("div",{style:{...S.card,border:"1.5px solid #86EFAC"}},
+      ce("div",{style:{textAlign:"center",marginBottom:16}},
+        ce("div",{style:{fontSize:28,marginBottom:6}},"✅"),
+        ce("div",{style:{fontSize:18,fontWeight:700,color:"#16181D"}}),deliveries[delIdx]?.envName+" "+deliveries[delIdx]?.room+" entregue!",
+        ce("div",{style:{fontSize:13,color:"#64748B",marginTop:4}}),"Registre pendências abertas (opcional)"
+      ),
+      ce("textarea",{style:{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #E2E8F0",fontSize:13,minHeight:80,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box"},placeholder:"Ex: rejunte faltando no rodapé, limpeza pendente...",value:pendencias,onChange:e=>setPendencias(e.target.value)}),
+      ce("button",{onClick:handlePendencias,style:{...S.btnP,width:"100%",marginTop:12,padding:"12px",fontSize:13}},pendencias?"Salvar com pendências":"Confirmar sem pendências")
+    ),
+
+    // ── STEP: MOTIVO ──
+    step==="motivo"&&ce("div",{style:{...S.card,border:"1.5px solid #FCA5A5"}},
+      ce("div",{style:{textAlign:"center",marginBottom:16}},
+        ce("div",{style:{fontSize:28,marginBottom:6}},"❌"),
+        ce("div",{style:{fontSize:16,fontWeight:700,color:"#16181D"}}),deliveries[delIdx]?.envName+" "+deliveries[delIdx]?.room+" não entregue",
+        ce("div",{style:{fontSize:13,color:"#64748B",marginTop:4}}),"Qual foi o principal motivo?"
+      ),
+      ce("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+        DELAY_CAUSES.map((c,i)=>ce("button",{key:i,onClick:async()=>{setMotivo(c);await handleMotivo();},style:{padding:"12px 16px",borderRadius:10,border:`1.5px solid ${motivo===c?"#C05050":"#E2E8F0"}`,background:motivo===c?"#FEF0F0":"#fff",color:motivo===c?"#C05050":"#374151",fontSize:13,fontWeight:500,textAlign:"left",cursor:"pointer"}},c))
+      )
+    ),
+
+    // ── STEP: DONE ──
+    step==="done"&&ce("div",{style:{...S.card,textAlign:"center",padding:"32px 24px"}},
+      ce("div",{style:{fontSize:48,marginBottom:12}},"🎉"),
+      ce("div",{style:{fontSize:20,fontWeight:700,color:"#16181D",marginBottom:8}}),"Registro do dia concluído!",
+      ce("div",{style:{fontSize:13,color:"#64748B",marginBottom:20}}),savedSteps.length+" registros salvos para "+date,
+      ce("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:20,textAlign:"left"}},
+        savedSteps.map((s,i)=>ce("div",{key:i,style:{padding:"8px 12px",background:"#F8FAFC",borderRadius:8,fontSize:12,color:"#64748B"}},
+          s.tipo==="efetivo"?`👥 Efetivo: ${s.efeivoReal}/${s.efetivoPrevisto}p${s.efeitoImpacto?" · Impactou":""}`:
+          s.tipo==="recuperacao"?`📈 Recuperação: ${s.recuperacao}`:
+          s.tipo==="entrega"?`${s.entregue?"✅":"❌"} ${grp.envName||"Ambiente"} ${s.room} · ${s.floor}° ${s.entregue?"entregue":(s.motivo||"não entregue")}`:""
+        ))
+      ),
+      ce("button",{onClick:reset,style:{...S.btnP,padding:"12px 24px",fontSize:13}}),"Novo registro"
+    ),
+
+    // Upcoming deliveries sidebar
+    upcoming.length>0&&step==="efetivo"&&ce("div",{style:{...S.card,marginTop:14}},
+      ce("p",{style:S.h3},"Próximas entregas"),
+      upcoming.map((d,i)=>ce("div",{key:i,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #F1F5F9",fontSize:12}},
+        ce("div",null,
+          ce("span",{style:{fontWeight:600,color:"#16181D"}}),d.envName+" "+d.room+" · "+d.floor+"°",
+          ce("span",{style:{fontSize:11,color:"#94A3B8",marginLeft:8}}),d.coName
+        ),
+        ce("span",{style:{...S.badge(d.daysUntil===0?"#C05050":d.daysUntil<=2?"#D97706":"#2D8A5F")}},
+          d.daysUntil===0?"Hoje":d.daysUntil===1?"Amanhã":"Em "+d.daysUntil+"d"
+        )
+      ))
     )
   );
 }
@@ -684,6 +868,90 @@ function GroupTeams({grp,setGroups,onSave,showToast}){
         )
       )
     ))
+  );
+}
+
+// ══════════ GROUP PRODUCAO ══════════
+function GroupProducao({grp,updates,schedules,companies}){
+  const [filterCo,setFilterCo]=useState("");
+  const sched=schedules[grp.id]||{},grpUpd=updates[grp.id]||[];
+  const progress=useMemo(()=>computeProgress(updates,schedules,grp.id),[updates,schedules,grp.id]);
+
+  const allCos=(grp.companies||[]);
+  const filteredCos=filterCo?allCos.filter(c=>c.id===filterCo):allCos;
+  const allTeams=filteredCos.flatMap(co=>co.teams.map(t=>({...t,coName:co.name,coColor:co.color})));
+
+  // Today's efetivo per team
+  const todayEfetivo={};
+  grpUpd.filter(u=>u.date===TODAY&&u.tipo==="efetivo").forEach(u=>{todayEfetivo[u.teamId]={real:u.efeivoReal,previsto:u.efetivoPrevisto};});
+
+  return ce("div",null,
+    ce("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
+      ce("div",null,
+        ce("div",{style:{fontSize:16,fontWeight:700,color:"#16181D"}}),"Visão de Produção — "+grp.name,
+        ce("p",{style:{fontSize:12,color:"#94A3B8",marginTop:3}}),"Efetivo diário e avanço por andar"
+      ),
+      ce("div",{style:{display:"flex",gap:8}},
+        ce("button",{onClick:()=>setFilterCo(""),style:{...filterCo===""?S.btnP:S.btnS,fontSize:11,padding:"5px 12px"}}),"Todos",
+        allCos.map(co=>ce("button",{key:co.id,onClick:()=>setFilterCo(filterCo===co.id?"":co.id),style:{padding:"5px 12px",borderRadius:8,border:"none",fontSize:11,fontWeight:600,background:filterCo===co.id?co.color:"#F1F5F9",color:filterCo===co.id?"#fff":"#64748B",cursor:"pointer"}}),co.name)
+      )
+    ),
+    // Stacking table
+    ce("div",{style:{...S.card,padding:0,overflow:"hidden"}},
+      // Header
+      ce("div",{style:{display:"grid",gridTemplateColumns:"56px 1fr "+allTeams.map(()=>"110px").join(" "),background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",padding:"10px 16px",gap:12,alignItems:"center"}},
+        ce("div",{style:{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px"}},"Andar"),
+        ce("div",{style:{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px"}},"Avanço"),
+        allTeams.map(t=>ce("div",{key:t.id,style:{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"1px",textAlign:"center"}},
+          ce("div",{style:{color:t.coColor,marginBottom:2}},t.coName),
+          t.name+" ("+t.dpu+"d/amb)"
+        ))
+      ),
+      FLOORS.map((fl,fi)=>{
+        const s=progress.floorStats[fl];
+        const st=getStatus(s.actualPct,s.plannedPct,s.doneRooms>=s.roomCount&&s.roomCount>0);
+        const isEven=fi%2===0;
+        return ce("div",{key:fl,style:{display:"grid",gridTemplateColumns:"56px 1fr "+allTeams.map(()=>"110px").join(" "),background:isEven?"#fff":"#FAFBFD",borderBottom:"1px solid #F1F5F9",padding:"12px 16px",gap:12,alignItems:"center"}},
+          // Floor number
+          ce("div",{style:{fontWeight:700,fontSize:15,color:"#16181D"}},fl+"°"),
+          // Progress bar
+          ce("div",null,
+            ce("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
+              ce("span",{style:{fontSize:11,fontWeight:600,color:"#374151"}}),s.actualPct.toFixed(0)+"%",
+              ce("span",{style:{...S.badge(st.color),fontSize:9}},st.label)
+            ),
+            ce("div",{style:{background:"#E8ECF4",borderRadius:4,height:6}},
+              ce("div",{style:{width:Math.min(100,s.actualPct)+"%",background:st.color,height:6,borderRadius:4,transition:"width .6s ease"}})
+            ),
+            ce("div",{style:{fontSize:10,color:"#94A3B8",marginTop:2}}),s.doneRooms+"/"+s.roomCount+" "+grp.envName+"s"
+          ),
+          // Efetivo per team
+          allTeams.map(t=>{
+            if(!(t.assignedFloors||[]).includes(fl))return ce("div",{key:t.id,style:{textAlign:"center",color:"#CBD5E1",fontSize:12}}),"──";
+            const ef=todayEfetivo[t.id];
+            const previsto=t.people||1;
+            const real=ef?.real;
+            const pct=real!=null?Math.round(real/previsto*100):null;
+            const color=real==null?"#94A3B8":real>=previsto?"#2D8A5F":real>=previsto*0.7?"#D97706":"#C05050";
+            return ce("div",{key:t.id,style:{textAlign:"center"}},
+              ce("div",{style:{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:color+"15",border:`1px solid ${color}30`}},
+                ce("span",{style:{fontSize:13,fontWeight:700,color}}),real!=null?real+"/"+previsto+"p":previsto+"p",
+                real!=null&&ce("span",{style:{fontSize:10,color}}),real!=null?"("+pct+"%)":""
+              ),
+              real==null&&ce("div",{style:{fontSize:9,color:"#94A3B8",marginTop:2}}),"não registrado"
+            );
+          })
+        );
+      })
+    ),
+    // Legend
+    ce("div",{style:{display:"flex",gap:16,marginTop:12,flexWrap:"wrap"}},
+      [["#2D8A5F","No prazo / Finalizado"],["#2A7AB8","Em alerta"],["#C05050","Atrasado"]].map(([c,l])=>
+        ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748B"}},
+          ce("div",{style:{width:10,height:10,borderRadius:3,background:c}}),l
+        )
+      )
+    )
   );
 }
 
@@ -822,7 +1090,7 @@ function App(){
   },[groups,schedules,updates]);
 
   const curGrp=groups.find(g=>g.id===selectedGroup);
-  const TABS=[{id:"dashboard",l:"Dashboard"},{id:"update",l:"Atualizacao"},{id:"schedule",l:"Cronograma"},{id:"teams",l:"Equipes"},{id:"analysis",l:"Analise IA"}];
+  const TABS=[{id:"dashboard",l:"Dashboard"},{id:"update",l:"Atualização"},{id:"schedule",l:"Cronograma"},{id:"teams",l:"Equipes"},{id:"producao",l:"Produção"},{id:"analysis",l:"Análise IA"}];
 
   return ce("div",{style:{display:"flex",height:"100vh",overflow:"hidden",fontFamily:"'Outfit',system-ui,sans-serif",background:"#F0F2F7"}},
     // Sidebar
@@ -884,6 +1152,7 @@ function App(){
         groupTab==="update"&&ce(GroupUpdate,{grp:curGrp,updates,onPushUpdate,schedules,showToast}),
         groupTab==="schedule"&&ce(GroupSchedule,{grp:curGrp,schedules,setSchedules,onSave:saveAll,showToast}),
         groupTab==="teams"&&ce(GroupTeams,{grp:curGrp,setGroups,onSave:saveAll,showToast}),
+        groupTab==="producao"&&ce(GroupProducao,{grp:curGrp,updates,schedules,companies:curGrp.companies||[]}),
         groupTab==="analysis"&&ce(GroupAnalysis,{grp:curGrp,schedules,updates,aiInsights,isLoadingAI,onRunAI})
       ):ce(Overview,{groups,updates,schedules,setSelectedGroup}),
       toast&&ce("div",{style:{position:"fixed",bottom:20,right:20,padding:"11px 20px",borderRadius:9,background:"#1A1D23",color:"#fff",fontSize:12,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,.15)",zIndex:9999,borderLeft:"3px solid #A8C4B0"}},toast)
