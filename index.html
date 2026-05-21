@@ -94,132 +94,114 @@ const S={
 
 // ── Chart ──
 function LineChart({data,color,h}){
-  const H=h||280;
-  if(!data||data.length<2)return ce("div",{style:{height:H,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:"#B0B8D0",gap:12}},
-    ce("svg",{width:40,height:40,viewBox:"0 0 40 40"},
-      ce("polyline",{points:"4,32 12,20 20,24 28,10 36,14",fill:"none",stroke:"#D0D5E8",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"}),
-      ce("circle",{cx:36,cy:14,r:3,fill:"#D0D5E8"})
-    ),
-    ce("span",{style:{fontSize:13,fontWeight:500,color:"#B0B8D0"}},"Registre avanços para ver o gráfico")
+  const H=h||300;
+  if(!data||data.length<2)return ce("div",{style:{height:H,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12}},
+    ce("div",{style:{width:48,height:48,borderRadius:12,background:"linear-gradient(135deg,#EEF2FF,#E0E7FF)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}},"📈"),
+    ce("span",{style:{fontSize:13,fontWeight:500,color:"#94A3B8"}}),"Registre avanços para ver o gráfico"
   );
 
   const meta=data._meta||{};
   const hasDelay=meta.delayDays>0;
-  const accentColor=color||"#7AA4C8";
+  const base=color||"#6366F1";
 
-  // Canvas dimensions
-  const W=860,H2=H-60,pL=48,pR=28,pT=16,pB=32;
-  const cW=W-pL-pR,cH=H2-pT-pB;
-
+  // Darken/brighten color for vibrancy
+  const W=860,CH=H-50,pL=50,pR=32,pT=20,pB=36;
+  const cW=W-pL-pR,cH=CH-pT-pB;
   const allV=data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
-  const rawMax=Math.max(...allV,1);
-  const maxV=Math.ceil(rawMax/25)*25||100;
+  const maxV=Math.max(...allV,100);
   const xp=i=>pL+(i/Math.max(1,data.length-1))*cW;
-  const yp=v=>pT+cH*(1-(v/maxV));
+  const yp=v=>pT+cH*(1-Math.min(v,maxV)/maxV);
 
-  // Smooth bezier
   const bezier=pts=>{
     if(!pts||pts.length<2)return null;
     let d=`M ${xp(pts[0].i).toFixed(1)} ${yp(pts[0].v).toFixed(1)}`;
     for(let j=1;j<pts.length;j++){
       const p=pts[j-1],c=pts[j];
-      const cpx=((xp(p.i)+xp(c.i))/2).toFixed(1);
-      d+=` C ${cpx} ${yp(p.v).toFixed(1)}, ${cpx} ${yp(c.v).toFixed(1)}, ${xp(c.i).toFixed(1)} ${yp(c.v).toFixed(1)}`;
+      const mx=((xp(p.i)+xp(c.i))/2).toFixed(1);
+      d+=` C ${mx} ${yp(p.v).toFixed(1)},${mx} ${yp(c.v).toFixed(1)},${xp(c.i).toFixed(1)} ${yp(c.v).toFixed(1)}`;
     }
     return d;
   };
 
-  const actualPts=data.map((d,i)=>({v:d.actual,i})).filter(p=>p.v!==undefined);
-  const plannedPts=data.map((d,i)=>({v:d.planned,i})).filter(p=>p.v!==undefined);
-  const trendPts=data.map((d,i)=>({v:d.trend,i})).filter(p=>p.v!==undefined);
+  const aP=data.map((d,i)=>({v:d.actual,i})).filter(p=>p.v!==undefined);
+  const plP=data.map((d,i)=>({v:d.planned,i})).filter(p=>p.v!==undefined);
+  const trP=data.map((d,i)=>({v:d.trend,i})).filter(p=>p.v!==undefined);
   const todayI=data.findLastIndex(d=>d.actual!==undefined);
-  const plannedEndI=data.findIndex(d=>d.planned>=99);
-  const trendEndI=data.findIndex(d=>d.trend>=99);
   const step=Math.max(1,Math.floor(data.length/7));
-  const gradId="g"+accentColor.replace(/[^a-z0-9]/gi,"");
+  const gid="cg"+base.replace(/[^a-z0-9]/gi,"");
 
-  // Area under actual
-  const areaD=actualPts.length>=2?(()=>{
-    const ln=bezier(actualPts);
-    const last=actualPts[actualPts.length-1],first=actualPts[0];
+  const areaD=aP.length>=2?(()=>{
+    const ln=bezier(aP),last=aP[aP.length-1],first=aP[0];
     return ln+` L ${xp(last.i).toFixed(1)} ${(pT+cH).toFixed(1)} L ${xp(first.i).toFixed(1)} ${(pT+cH).toFixed(1)} Z`;
   })():null;
 
-  const gridY=[0,25,50,75,100].filter(v=>v<=maxV);
-
   return ce("div",{style:{fontFamily:"'Outfit',system-ui,sans-serif"}},
-    // Delay banner – compact
-    hasDelay&&ce("div",{style:{display:"flex",flexWrap:"wrap",alignItems:"center",gap:14,marginBottom:14,padding:"9px 14px",background:"linear-gradient(135deg,#FEF3F3,#FFF)",borderRadius:10,border:"1px solid #FCD8D8"}},
-      ce("span",{style:{fontSize:11,fontWeight:700,color:"#C05050",display:"flex",alignItems:"center",gap:5}},"⚠ Impacto na entrega"),
-      ce("span",{style:{fontSize:11,color:"#6A7090"}},"Prazo: ",ce("b",{style:{color:"#16181D"}},meta.plannedEndDate?.slice(8)+"/"+meta.plannedEndDate?.slice(5,7))),
-      ce("span",{style:{fontSize:11,color:"#C05050"}},"Projeção: ",ce("b",null,meta.projectedEndDate?.slice(8)+"/"+meta.projectedEndDate?.slice(5,7))),
-      ce("span",{style:{display:"inline-flex",alignItems:"center",padding:"2px 10px",borderRadius:20,background:"#FEE8E8",fontSize:11,fontWeight:700,color:"#C05050"}},"+"+meta.delayDays+"d"),
-      ce("span",{style:{fontSize:11,color:"#B8895A",marginLeft:"auto"}},meta.ratePerDay+"% / dia")
+    // Impact banner
+    hasDelay&&ce("div",{style:{display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,marginBottom:14,padding:"10px 16px",background:"#FFF5F5",borderRadius:10,border:"1px solid #FED7D7"}},
+      ce("span",{style:{fontSize:11,fontWeight:700,color:"#E53E3E",display:"flex",alignItems:"center",gap:4}},"⚠ Impacto na entrega"),
+      ce("span",{style:{fontSize:11,color:"#718096"}},"Prazo: ",ce("b",{style:{color:"#2D3748"}},meta.plannedEndDate?.slice(8)+"/"+meta.plannedEndDate?.slice(5,7)+"/"+meta.plannedEndDate?.slice(0,4))),
+      ce("span",{style:{fontSize:11,color:"#E53E3E"}},"Projeção: ",ce("b",null,meta.projectedEndDate?.slice(8)+"/"+meta.projectedEndDate?.slice(5,7)+"/"+meta.projectedEndDate?.slice(0,4))),
+      ce("span",{style:{padding:"2px 10px",borderRadius:20,background:"#FED7D7",fontSize:11,fontWeight:700,color:"#E53E3E"}},"+"+meta.delayDays+" dias"),
+      ce("span",{style:{fontSize:11,color:"#D69E2E",marginLeft:"auto",fontWeight:600}},meta.ratePerDay+"% / dia")
     ),
-    ce("svg",{viewBox:`0 0 ${W} ${H2+6}`,style:{width:"100%",height:H2+6},preserveAspectRatio:"xMidYMid meet"},
+    ce("svg",{viewBox:`0 0 ${W} ${CH+8}`,style:{width:"100%",height:CH+8},preserveAspectRatio:"xMidYMid meet"},
       ce("defs",null,
-        // Main area gradient
-        ce("linearGradient",{id:gradId,x1:"0",y1:"0",x2:"0",y2:"1"},
-          ce("stop",{offset:"0%",stopColor:accentColor,stopOpacity:"0.22"}),
-          ce("stop",{offset:"60%",stopColor:accentColor,stopOpacity:"0.06"}),
-          ce("stop",{offset:"100%",stopColor:accentColor,stopOpacity:"0"})
+        // Strong area gradient
+        ce("linearGradient",{id:gid+"a",x1:"0",y1:"0",x2:"0",y2:"1"},
+          ce("stop",{offset:"0%",stopColor:base,stopOpacity:"0.35"}),
+          ce("stop",{offset:"50%",stopColor:base,stopOpacity:"0.12"}),
+          ce("stop",{offset:"100%",stopColor:base,stopOpacity:"0"})
         ),
-        // Glow filter on actual line
-        ce("filter",{id:"glow"+gradId},
-          ce("feGaussianBlur",{stdDeviation:"3",result:"blur"}),
-          ce("feComposite",{in:"SourceGraphic",in2:"blur",operator:"over"})
+        // Line glow
+        ce("filter",{id:gid+"f",x:"-20%",y:"-20%",width:"140%",height:"140%"},
+          ce("feGaussianBlur",{in:"SourceGraphic",stdDeviation:"4",result:"blur"}),
+          ce("feMerge",null,ce("feMergeNode",{in:"blur"}),ce("feMergeNode",{in:"SourceGraphic"}))
+        ),
+        // Chart bg gradient
+        ce("linearGradient",{id:gid+"bg",x1:"0",y1:"0",x2:"0",y2:"1"},
+          ce("stop",{offset:"0%",stopColor:base,stopOpacity:"0.03"}),
+          ce("stop",{offset:"100%",stopColor:"#fff",stopOpacity:"0"})
         )
       ),
-      // Grid — horizontal only, very subtle
-      gridY.map((v,i)=>ce("g",{key:"g"+i},
-        ce("line",{x1:pL,x2:W-pR,y1:yp(v).toFixed(1),y2:yp(v).toFixed(1),stroke:v===0?"#E2E6F0":"#F0F2F8",strokeWidth:1}),
-        ce("text",{x:pL-8,y:(yp(v)+4).toFixed(1),textAnchor:"end",fontSize:10,fill:"#C0C6D8",fontFamily:"system-ui",fontWeight:"500"},v+"%")
+      // Chart area background
+      ce("rect",{x:pL,y:pT,width:cW,height:cH,fill:`url(#${gid}bg)`,rx:4}),
+      // Grid lines — minimal, elegant
+      [0,25,50,75,100].map((v,i)=>ce("g",{key:"g"+i},
+        ce("line",{x1:pL,x2:W-pR,y1:yp(v).toFixed(1),y2:yp(v).toFixed(1),stroke:v===0?"#E2E8F0":"#F1F5F9",strokeWidth:v===0?1.5:1}),
+        ce("text",{x:pL-8,y:(yp(v)+4).toFixed(1),textAnchor:"end",fontSize:10,fill:"#94A3B8",fontFamily:"system-ui",fontWeight:"500"},v+"%")
       )),
-      // Shaded delay region
-      hasDelay&&plannedEndI>=0&&trendEndI>plannedEndI&&ce("rect",{key:"delay",x:xp(plannedEndI),y:pT,width:Math.max(0,xp(trendEndI)-xp(plannedEndI)),height:cH,fill:"#C05050",opacity:.05,rx:4}),
-      // Planned line — subtle dashed
-      plannedPts.length>=2&&ce("path",{key:"plan",d:bezier(plannedPts),stroke:"#C8CCDC",strokeWidth:1.5,fill:"none",strokeDasharray:"8,6",strokeLinecap:"round",opacity:.8}),
-      // Trend line — warm amber dashed
-      trendPts.length>=2&&ce("path",{key:"trend",d:bezier(trendPts),stroke:"#E8A040",strokeWidth:2,fill:"none",strokeDasharray:"6,4",strokeLinecap:"round"}),
-      // Area fill under actual
-      areaD&&ce("path",{key:"area",d:areaD,fill:`url(#${gradId})`}),
-      // Actual line — bold, colored
-      actualPts.length>=2&&ce("path",{key:"act",d:bezier(actualPts),stroke:accentColor,strokeWidth:3,fill:"none",strokeLinecap:"round",strokeLinejoin:"round"}),
-      // Today vertical
+      // Planned — subtle thin dashed
+      plP.length>=2&&ce("path",{key:"pl",d:bezier(plP),stroke:"#CBD5E1",strokeWidth:1.5,fill:"none",strokeDasharray:"10,6",strokeLinecap:"round",opacity:.7}),
+      // Trend — amber dashed
+      trP.length>=2&&ce("path",{key:"tr",d:bezier(trP),stroke:"#F59E0B",strokeWidth:2,fill:"none",strokeDasharray:"7,4",strokeLinecap:"round"}),
+      // Area fill
+      areaD&&ce("path",{key:"area",d:areaD,fill:`url(#${gid}a)`}),
+      // Actual — BOLD with glow
+      aP.length>=2&&ce("path",{key:"act",d:bezier(aP),stroke:base,strokeWidth:3.5,fill:"none",strokeLinecap:"round",strokeLinejoin:"round",filter:`url(#${gid}f)`}),
+      aP.length>=2&&ce("path",{key:"act2",d:bezier(aP),stroke:base,strokeWidth:2.5,fill:"none",strokeLinecap:"round",strokeLinejoin:"round"}),
+      // Today line
       todayI>=0&&ce("g",{key:"today"},
-        ce("line",{x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#E0A0A8",strokeWidth:1.5,strokeDasharray:"5,4"}),
-        ce("rect",{x:xp(todayI)-16,y:pT-2,width:32,height:14,rx:3,fill:"#FFEAEC"}),
-        ce("text",{x:xp(todayI),y:pT+9,textAnchor:"middle",fontSize:8.5,fill:"#C05050",fontFamily:"system-ui",fontWeight:"700"},"Hoje")
+        ce("line",{x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#FC8181",strokeWidth:1.5,strokeDasharray:"6,4"}),
+        ce("rect",{x:xp(todayI)-18,y:pT,width:36,height:16,rx:4,fill:"#FED7D7"}),
+        ce("text",{x:xp(todayI),y:pT+11,textAnchor:"middle",fontSize:9,fill:"#E53E3E",fontFamily:"system-ui",fontWeight:"700"},"HOJE")
       ),
-      // Planned end marker
-      plannedEndI>=0&&ce("g",{key:"prazo"},
-        ce("line",{x1:xp(plannedEndI),x2:xp(plannedEndI),y1:pT,y2:pT+cH,stroke:"#C8CCDC",strokeWidth:1,strokeDasharray:"4,4"}),
-        ce("rect",{x:xp(plannedEndI)-16,y:pT-2,width:34,height:14,rx:3,fill:"#F5F6FB"}),
-        ce("text",{x:xp(plannedEndI)+1,y:pT+9,textAnchor:"middle",fontSize:8.5,fill:"#8A90A8",fontFamily:"system-ui",fontWeight:"600"},"Prazo")
-      ),
-      // Projected end marker
-      hasDelay&&trendEndI>=0&&ce("g",{key:"proj"},
-        ce("line",{x1:xp(trendEndI),x2:xp(trendEndI),y1:pT,y2:pT+cH,stroke:"#E8A040",strokeWidth:1.5,strokeDasharray:"4,3"}),
-        ce("rect",{x:xp(trendEndI)-20,y:pT-2,width:40,height:14,rx:3,fill:"#FEF6E8"}),
-        ce("text",{x:xp(trendEndI),y:pT+9,textAnchor:"middle",fontSize:8.5,fill:"#B8895A",fontFamily:"system-ui",fontWeight:"600"},"Projeção")
-      ),
-      // Dots on actual data points
-      actualPts.filter(p=>p.v>0).map((p,i)=>ce("g",{key:"d"+i},
-        ce("circle",{cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:6,fill:accentColor,opacity:.15}),
-        ce("circle",{cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:3.5,fill:accentColor,stroke:"#fff",strokeWidth:2})
+      // Dots — premium style
+      aP.filter(p=>p.v>0).map((p,i)=>ce("g",{key:"dot"+i},
+        ce("circle",{cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:7,fill:base,opacity:.15}),
+        ce("circle",{cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:4,fill:base,stroke:"#fff",strokeWidth:2.5})
       )),
-      // X-axis labels
+      // X labels
       data.filter((_,i)=>i%step===0).map((d,i)=>
-        ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:H2-6,textAnchor:"middle",fontSize:9.5,fill:"#B0B8D0",fontFamily:"system-ui"},d.date)
+        ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:CH+4,textAnchor:"middle",fontSize:10,fill:"#94A3B8",fontFamily:"system-ui"},d.date)
       )
     ),
     // Legend
-    ce("div",{style:{display:"flex",gap:24,marginTop:10,paddingLeft:pL+"px"}},
-      [[accentColor,"Realizado",false],[" #C8CCDC","Planejado",true],["#E8A040","Tendência",true]].map(([c,l,dashed])=>
-        ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:7,fontSize:11,color:"#7A8094"}},
-          ce("svg",{width:28,height:12,viewBox:"0 0 28 12"},
-            ce("line",{x1:0,y1:6,x2:28,y2:6,stroke:c.trim(),strokeWidth:dashed?1.5:2.5,strokeDasharray:dashed?"7,4":"none",strokeLinecap:"round"}),
-            !dashed&&ce("circle",{cx:14,cy:6,r:3,fill:c,stroke:"#fff",strokeWidth:1.5})
+    ce("div",{style:{display:"flex",gap:24,marginTop:10,paddingLeft:"50px"}},
+      [[base,"Realizado",false],["#CBD5E1","Planejado",true],["#F59E0B","Tendência",true]].map(([c,l,dash])=>
+        ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:7,fontSize:11,color:"#64748B"}},
+          ce("svg",{width:26,height:10,viewBox:"0 0 26 10"},
+            ce("line",{x1:0,y1:5,x2:26,y2:5,stroke:c,strokeWidth:dash?1.5:2.5,strokeDasharray:dash?"7,4":"none",strokeLinecap:"round"}),
+            !dash&&ce("circle",{cx:13,cy:5,r:3,fill:c,stroke:"#fff",strokeWidth:2})
           ),
           l
         )
@@ -262,28 +244,29 @@ function computeChart(updates,schedules,gid,filterFloor){
   });
   if(!hasSchedule){earliestStart=TODAY;latestEnd=fmt(addD(new Date(),90));}
 
-  // Current actual — only count floors that have started AND have at least 1 update
+  // Progress calculation — use only environments with updates
   const todayAcc={};
   grpUpd.filter(u=>u.date<=TODAY).forEach(u=>{
     const k=`${u.floor}_${u.room}_${u.environment||"A"}`;
     todayAcc[k]=(todayAcc[k]||0)+(u.actualPct||0);
   });
-  // Use only floors with actual updates for rate calculation
-  const activeFloorSet=new Set(grpUpd.map(u=>u.floor));
-  let totalUnitsActive=0;
-  activeFloorSet.forEach(fl=>{const sc=sched[fl];totalUnitsActive+=sc?.roomCount||12;});
   const todayVals=Object.values(todayAcc).map(v=>Math.min(100,v));
   const sumActual=todayVals.reduce((a,b)=>a+b,0);
-  const currentActual=totalUnitsActive>0?sumActual/totalUnitsActive:(todayVals.length?sumActual/todayVals.length:0);
 
-  // Overall project rate based on total units across all started floors
-  let totalUnitsNow=0;
-  floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&TODAY>=sc.startDate)totalUnitsNow+=sc.roomCount||12;});
-  const currentActualOverall=totalUnitsNow>0?sumActual/totalUnitsNow:currentActual;
+  // Total units in project scope (all floors with schedule)
+  let totalUnitsScope=0;
+  floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate)totalUnitsScope+=sc.roomCount||12;});
+  if(totalUnitsScope===0)totalUnitsScope=floors.length*12;
 
-  // Daily rate based on days with actual work
-  const workDays=Math.max(1,[...new Set(grpUpd.map(u=>u.date))].length);
-  const ratePerDay=currentActualOverall/Math.max(workDays,diffD(earliestStart,TODAY)/2);
+  // Project % complete = sum of all unit progress / total possible
+  const currentActual=sumActual/totalUnitsScope;
+  const currentActualOverall=currentActual;
+
+  // Rate: average daily progress over ACTUAL work days only
+  const workDates=[...new Set(grpUpd.map(u=>u.date))].sort();
+  const workDays=Math.max(1,workDates.length);
+  // Use daily increment: how many % per work day on average
+  const ratePerDay=sumActual/(workDays*totalUnitsScope);
 
   // Project trend end date: when does trend reach 100%?
   let projectedEndDate=latestEnd;
@@ -368,7 +351,11 @@ function GroupDashboard({grp,updates,schedules,setTab}){
   const grpUpd=updates[grp.id]||[];
   const avgPct=totals.total>0?Math.round(totals.sumPct/totals.total):0;
   const daysA=grpUpd.length>0?Math.max(1,diffD(grpUpd[0]?.date||TODAY,TODAY)+1):1;
-  const dp=(grpUpd.reduce((s,u)=>s+(u.actualPct||0),0)/daysA).toFixed(1);
+  // Daily pace: environments advanced per work day (%)
+  const workDaysArr=[...new Set(grpUpd.map(u=>u.date))];
+  const wdCount=Math.max(1,workDaysArr.length);
+  const totalPctDone=grpUpd.reduce((s,u)=>s+(u.actualPct||0),0);
+  const dp=(totalPctDone/wdCount).toFixed(1);
   const atRisk=FLOORS.filter(f=>{const s=floorStats[f];return getStatus(s.actualPct,s.plannedPct,s.doneRooms>=s.roomCount&&s.roomCount>0).label==="Atrasado";}).length;
   const flSc=selFloor?(schedules[grp.id]||{})[selFloor]||{}:{};
   const flRooms=selFloor?parseRooms(flSc):[];
