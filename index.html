@@ -94,116 +94,132 @@ const S={
 
 // ── Chart ──
 function LineChart({data,color,h}){
-  const H=h||260;
-  if(!data||data.length<2)return ce("div",{style:{height:H,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:"#B0B8D0",gap:10}},
-    ce("div",{style:{fontSize:28}},"📈"),
-    ce("div",{style:{fontSize:13,fontWeight:500}},"Registre avanços para ver o gráfico")
+  const H=h||280;
+  if(!data||data.length<2)return ce("div",{style:{height:H,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:"#B0B8D0",gap:12}},
+    ce("svg",{width:40,height:40,viewBox:"0 0 40 40"},
+      ce("polyline",{points:"4,32 12,20 20,24 28,10 36,14",fill:"none",stroke:"#D0D5E8",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"}),
+      ce("circle",{cx:36,cy:14,r:3,fill:"#D0D5E8"})
+    ),
+    ce("span",{style:{fontSize:13,fontWeight:500,color:"#B0B8D0"}},"Registre avanços para ver o gráfico")
   );
-  const meta=data._meta||{};
-  const W=860,CH=H-50,pL=44,pR=24,pT=14,pB=28,cW=W-pL-pR,cH=CH-pT-pB;
-  const allV=data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
-  const maxV=Math.max(...allV,1);
-  const xp=i=>pL+(i/(data.length-1))*cW;
-  const yp=v=>pT+cH-(v/maxV)*cH;
 
-  // Smooth bezier curve through points
-  const smoothLine=(pts)=>{
-    if(pts.length===0)return null;
-    if(pts.length===1)return `M ${xp(pts[0].i).toFixed(1)} ${yp(pts[0].v).toFixed(1)}`;
+  const meta=data._meta||{};
+  const hasDelay=meta.delayDays>0;
+  const accentColor=color||"#7AA4C8";
+
+  // Canvas dimensions
+  const W=860,H2=H-60,pL=48,pR=28,pT=16,pB=32;
+  const cW=W-pL-pR,cH=H2-pT-pB;
+
+  const allV=data.flatMap(d=>[d.planned,d.actual,d.trend].filter(v=>v!==undefined));
+  const rawMax=Math.max(...allV,1);
+  const maxV=Math.ceil(rawMax/25)*25||100;
+  const xp=i=>pL+(i/Math.max(1,data.length-1))*cW;
+  const yp=v=>pT+cH*(1-(v/maxV));
+
+  // Smooth bezier
+  const bezier=pts=>{
+    if(!pts||pts.length<2)return null;
     let d=`M ${xp(pts[0].i).toFixed(1)} ${yp(pts[0].v).toFixed(1)}`;
     for(let j=1;j<pts.length;j++){
       const p=pts[j-1],c=pts[j];
-      const mx=((xp(p.i)+xp(c.i))/2).toFixed(1);
-      d+=` C ${mx} ${yp(p.v).toFixed(1)}, ${mx} ${yp(c.v).toFixed(1)}, ${xp(c.i).toFixed(1)} ${yp(c.v).toFixed(1)}`;
+      const cpx=((xp(p.i)+xp(c.i))/2).toFixed(1);
+      d+=` C ${cpx} ${yp(p.v).toFixed(1)}, ${cpx} ${yp(c.v).toFixed(1)}, ${xp(c.i).toFixed(1)} ${yp(c.v).toFixed(1)}`;
     }
     return d;
-  };
-
-  const mkLine=(key,pts,stroke,dash,sw)=>{
-    if(!pts||pts.length===0)return null;
-    const d=smoothLine(pts);
-    if(pts.length===1){const x=xp(pts[0].i),y=yp(pts[0].v);return ce("circle",{key,cx:x.toFixed(1),cy:y.toFixed(1),r:5,fill:stroke});}
-    return ce("path",{key,d,stroke,strokeWidth:sw||2,fill:"none",strokeDasharray:dash||"none",strokeLinecap:"round",strokeLinejoin:"round"});
   };
 
   const actualPts=data.map((d,i)=>({v:d.actual,i})).filter(p=>p.v!==undefined);
   const plannedPts=data.map((d,i)=>({v:d.planned,i})).filter(p=>p.v!==undefined);
   const trendPts=data.map((d,i)=>({v:d.trend,i})).filter(p=>p.v!==undefined);
+  const todayI=data.findLastIndex(d=>d.actual!==undefined);
+  const plannedEndI=data.findIndex(d=>d.planned>=99);
+  const trendEndI=data.findIndex(d=>d.trend>=99);
+  const step=Math.max(1,Math.floor(data.length/7));
+  const gradId="g"+accentColor.replace(/[^a-z0-9]/gi,"");
 
-  // Area fill under actual line
-  const areaPath=actualPts.length>=2?(()=>{
-    const linePath=smoothLine(actualPts);
+  // Area under actual
+  const areaD=actualPts.length>=2?(()=>{
+    const ln=bezier(actualPts);
     const last=actualPts[actualPts.length-1],first=actualPts[0];
-    return linePath+` L ${xp(last.i).toFixed(1)} ${(pT+cH).toFixed(1)} L ${xp(first.i).toFixed(1)} ${(pT+cH).toFixed(1)} Z`;
+    return ln+` L ${xp(last.i).toFixed(1)} ${(pT+cH).toFixed(1)} L ${xp(first.i).toFixed(1)} ${(pT+cH).toFixed(1)} Z`;
   })():null;
 
-  const todayI=data.findLastIndex(d=>d.actual!==undefined);
-  const plannedEndI=data.findIndex(d=>d.planned>=100);
-  const trendEndI=data.findIndex(d=>d.trend>=100);
-  const hasDelay=meta.delayDays>0;
-  const step=Math.max(1,Math.floor(data.length/8));
-  const accentColor=color||"#7AA4C8";
+  const gridY=[0,25,50,75,100].filter(v=>v<=maxV);
 
-  return ce("div",null,
-    // Delay banner
-    hasDelay&&ce("div",{style:{display:"flex",flexWrap:"wrap",alignItems:"center",gap:16,marginBottom:12,padding:"10px 14px",background:"#FEF3F3",borderRadius:10,border:"1px solid #FCDADA"}},
-      ce("span",{style:{fontSize:12,fontWeight:700,color:"#B86060"}},"⚠ Impacto na entrega"),
-      ce("span",{style:{fontSize:12,color:"#6A7090"}},"Prazo: ",ce("strong",{style:{color:"#16181D"}},meta.plannedEndDate?.slice(8)+"/"+meta.plannedEndDate?.slice(5,7)+"/"+meta.plannedEndDate?.slice(0,4))),
-      ce("span",{style:{fontSize:12,color:"#B86060"}},"Projeção: ",ce("strong",null,meta.projectedEndDate?.slice(8)+"/"+meta.projectedEndDate?.slice(5,7)+"/"+meta.projectedEndDate?.slice(0,4))),
-      ce("span",{style:{fontSize:12,fontWeight:700,color:"#B86060"}},"+"+meta.delayDays+" dias"),
-      ce("span",{style:{fontSize:12,color:"#B8895A"}},meta.ratePerDay+"% / dia")
+  return ce("div",{style:{fontFamily:"'Outfit',system-ui,sans-serif"}},
+    // Delay banner – compact
+    hasDelay&&ce("div",{style:{display:"flex",flexWrap:"wrap",alignItems:"center",gap:14,marginBottom:14,padding:"9px 14px",background:"linear-gradient(135deg,#FEF3F3,#FFF)",borderRadius:10,border:"1px solid #FCD8D8"}},
+      ce("span",{style:{fontSize:11,fontWeight:700,color:"#C05050",display:"flex",alignItems:"center",gap:5}},"⚠ Impacto na entrega"),
+      ce("span",{style:{fontSize:11,color:"#6A7090"}},"Prazo: ",ce("b",{style:{color:"#16181D"}},meta.plannedEndDate?.slice(8)+"/"+meta.plannedEndDate?.slice(5,7))),
+      ce("span",{style:{fontSize:11,color:"#C05050"}},"Projeção: ",ce("b",null,meta.projectedEndDate?.slice(8)+"/"+meta.projectedEndDate?.slice(5,7))),
+      ce("span",{style:{display:"inline-flex",alignItems:"center",padding:"2px 10px",borderRadius:20,background:"#FEE8E8",fontSize:11,fontWeight:700,color:"#C05050"}},"+"+meta.delayDays+"d"),
+      ce("span",{style:{fontSize:11,color:"#B8895A",marginLeft:"auto"}},meta.ratePerDay+"% / dia")
     ),
-    ce("svg",{viewBox:`0 0 ${W} ${CH+26}`,style:{width:"100%",height:H},preserveAspectRatio:"xMidYMid meet"},
-      // Defs: gradient for area fill
+    ce("svg",{viewBox:`0 0 ${W} ${H2+6}`,style:{width:"100%",height:H2+6},preserveAspectRatio:"xMidYMid meet"},
       ce("defs",null,
-        ce("linearGradient",{id:"areaGrad_"+( color||"def").replace(/[^a-z0-9]/gi,""),x1:"0",y1:"0",x2:"0",y2:"1"},
-          ce("stop",{offset:"0%",stopColor:accentColor,stopOpacity:"0.25"}),
-          ce("stop",{offset:"75%",stopColor:accentColor,stopOpacity:"0.04"}),
+        // Main area gradient
+        ce("linearGradient",{id:gradId,x1:"0",y1:"0",x2:"0",y2:"1"},
+          ce("stop",{offset:"0%",stopColor:accentColor,stopOpacity:"0.22"}),
+          ce("stop",{offset:"60%",stopColor:accentColor,stopOpacity:"0.06"}),
           ce("stop",{offset:"100%",stopColor:accentColor,stopOpacity:"0"})
+        ),
+        // Glow filter on actual line
+        ce("filter",{id:"glow"+gradId},
+          ce("feGaussianBlur",{stdDeviation:"3",result:"blur"}),
+          ce("feComposite",{in:"SourceGraphic",in2:"blur",operator:"over"})
         )
       ),
-      // Light horizontal grid lines
-      [0,0.25,0.5,0.75,1].map((p,i)=>
-        ce("line",{key:"g"+i,x1:pL,x2:W-pR,y1:(pT+cH*(1-p)).toFixed(1),y2:(pT+cH*(1-p)).toFixed(1),stroke:i===0?"#ECEEF6":"#F2F4F9",strokeWidth:1})
-      ),
-      // Y axis labels
-      [0,25,50,75,100].filter(v=>v<=maxV+5).map((v,i)=>
-        ce("text",{key:"y"+i,x:pL-6,y:yp(v)+4,textAnchor:"end",fontSize:10,fill:"#B0B8D0",fontFamily:"system-ui"},v+"%")
-      ),
+      // Grid — horizontal only, very subtle
+      gridY.map((v,i)=>ce("g",{key:"g"+i},
+        ce("line",{x1:pL,x2:W-pR,y1:yp(v).toFixed(1),y2:yp(v).toFixed(1),stroke:v===0?"#E2E6F0":"#F0F2F8",strokeWidth:1}),
+        ce("text",{x:pL-8,y:(yp(v)+4).toFixed(1),textAnchor:"end",fontSize:10,fill:"#C0C6D8",fontFamily:"system-ui",fontWeight:"500"},v+"%")
+      )),
+      // Shaded delay region
+      hasDelay&&plannedEndI>=0&&trendEndI>plannedEndI&&ce("rect",{key:"delay",x:xp(plannedEndI),y:pT,width:Math.max(0,xp(trendEndI)-xp(plannedEndI)),height:cH,fill:"#C05050",opacity:.05,rx:4}),
+      // Planned line — subtle dashed
+      plannedPts.length>=2&&ce("path",{key:"plan",d:bezier(plannedPts),stroke:"#C8CCDC",strokeWidth:1.5,fill:"none",strokeDasharray:"8,6",strokeLinecap:"round",opacity:.8}),
+      // Trend line — warm amber dashed
+      trendPts.length>=2&&ce("path",{key:"trend",d:bezier(trendPts),stroke:"#E8A040",strokeWidth:2,fill:"none",strokeDasharray:"6,4",strokeLinecap:"round"}),
       // Area fill under actual
-      areaPath&&ce("path",{key:"area",d:areaPath,fill:`url(#areaGrad_${(color||"def").replace(/[^a-z0-9]/gi,"")})`}),
-      // Planned line - thin dashed gray
-      mkLine("planned",plannedPts,"#D0D5E8","8,5",1.5),
-      // Trend line - amber dashed
-      mkLine("trend",trendPts,"#E8A048","5,4",2),
-      // Actual line - solid, group color, bold
-      mkLine("actual",actualPts,accentColor,null,3),
-      // Delay shaded region
-      hasDelay&&plannedEndI>=0&&trendEndI>=0&&ce("rect",{key:"dr",x:xp(plannedEndI),y:pT,width:Math.max(0,xp(trendEndI)-xp(plannedEndI)),height:cH,fill:"#C48282",opacity:.06}),
-      // Today marker
-      todayI>=0&&ce("line",{key:"td",x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#E0A0A0",strokeWidth:1.5,strokeDasharray:"5,4"}),
-      todayI>=0&&ce("text",{key:"tdl",x:xp(todayI)+4,y:pT+12,fontSize:9,fill:"#C48282",fontFamily:"system-ui",fontWeight:"600"},"Hoje"),
-      // End markers
-      plannedEndI>=0&&ce("line",{key:"pe",x1:xp(plannedEndI),x2:xp(plannedEndI),y1:pT,y2:pT+cH,stroke:"#C8CCDB",strokeWidth:1,strokeDasharray:"4,4"}),
-      plannedEndI>=0&&ce("text",{key:"pel",x:xp(plannedEndI)+3,y:pT+24,fontSize:8,fill:"#9BA3B8",fontFamily:"system-ui"},"Prazo"),
-      hasDelay&&trendEndI>=0&&ce("line",{key:"te",x1:xp(trendEndI),x2:xp(trendEndI),y1:pT,y2:pT+cH,stroke:"#E8A048",strokeWidth:1.5,strokeDasharray:"4,3"}),
-      hasDelay&&trendEndI>=0&&ce("text",{key:"tel",x:xp(trendEndI)+3,y:pT+24,fontSize:8,fill:"#B8895A",fontFamily:"system-ui"},"Projeção"),
-      // Dots on actual data points > 0
-      actualPts.filter(p=>p.v>0).map((p,i)=>
-        ce("circle",{key:"dot"+i,cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:4,fill:accentColor,stroke:"#fff",strokeWidth:2})
+      areaD&&ce("path",{key:"area",d:areaD,fill:`url(#${gradId})`}),
+      // Actual line — bold, colored
+      actualPts.length>=2&&ce("path",{key:"act",d:bezier(actualPts),stroke:accentColor,strokeWidth:3,fill:"none",strokeLinecap:"round",strokeLinejoin:"round"}),
+      // Today vertical
+      todayI>=0&&ce("g",{key:"today"},
+        ce("line",{x1:xp(todayI),x2:xp(todayI),y1:pT,y2:pT+cH,stroke:"#E0A0A8",strokeWidth:1.5,strokeDasharray:"5,4"}),
+        ce("rect",{x:xp(todayI)-16,y:pT-2,width:32,height:14,rx:3,fill:"#FFEAEC"}),
+        ce("text",{x:xp(todayI),y:pT+9,textAnchor:"middle",fontSize:8.5,fill:"#C05050",fontFamily:"system-ui",fontWeight:"700"},"Hoje")
       ),
-      // X axis labels
+      // Planned end marker
+      plannedEndI>=0&&ce("g",{key:"prazo"},
+        ce("line",{x1:xp(plannedEndI),x2:xp(plannedEndI),y1:pT,y2:pT+cH,stroke:"#C8CCDC",strokeWidth:1,strokeDasharray:"4,4"}),
+        ce("rect",{x:xp(plannedEndI)-16,y:pT-2,width:34,height:14,rx:3,fill:"#F5F6FB"}),
+        ce("text",{x:xp(plannedEndI)+1,y:pT+9,textAnchor:"middle",fontSize:8.5,fill:"#8A90A8",fontFamily:"system-ui",fontWeight:"600"},"Prazo")
+      ),
+      // Projected end marker
+      hasDelay&&trendEndI>=0&&ce("g",{key:"proj"},
+        ce("line",{x1:xp(trendEndI),x2:xp(trendEndI),y1:pT,y2:pT+cH,stroke:"#E8A040",strokeWidth:1.5,strokeDasharray:"4,3"}),
+        ce("rect",{x:xp(trendEndI)-20,y:pT-2,width:40,height:14,rx:3,fill:"#FEF6E8"}),
+        ce("text",{x:xp(trendEndI),y:pT+9,textAnchor:"middle",fontSize:8.5,fill:"#B8895A",fontFamily:"system-ui",fontWeight:"600"},"Projeção")
+      ),
+      // Dots on actual data points
+      actualPts.filter(p=>p.v>0).map((p,i)=>ce("g",{key:"d"+i},
+        ce("circle",{cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:6,fill:accentColor,opacity:.15}),
+        ce("circle",{cx:xp(p.i).toFixed(1),cy:yp(p.v).toFixed(1),r:3.5,fill:accentColor,stroke:"#fff",strokeWidth:2})
+      )),
+      // X-axis labels
       data.filter((_,i)=>i%step===0).map((d,i)=>
-        ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:CH+18,textAnchor:"middle",fontSize:9,fill:"#B0B8D0",fontFamily:"system-ui"},d.date)
+        ce("text",{key:"x"+i,x:xp(data.indexOf(d)).toFixed(1),y:H2-6,textAnchor:"middle",fontSize:9.5,fill:"#B0B8D0",fontFamily:"system-ui"},d.date)
       )
     ),
     // Legend
-    ce("div",{style:{display:"flex",gap:20,marginTop:8}},
-      [[accentColor,"Realizado","solid"],["#D0D5E8","Planejado","dashed"],["#E8A048","Tendência","dashed"]].map(([c,l,t])=>
-        ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#7A8094"}},
-          ce("svg",{width:24,height:10,viewBox:"0 0 24 10"},
-            ce("line",{x1:0,y1:5,x2:24,y2:5,stroke:c,strokeWidth:t==="solid"?2.5:1.5,strokeDasharray:t==="dashed"?"6,3":"none",strokeLinecap:"round"}),
-            t==="solid"&&ce("circle",{cx:12,cy:5,r:3,fill:c})
+    ce("div",{style:{display:"flex",gap:24,marginTop:10,paddingLeft:pL+"px"}},
+      [[accentColor,"Realizado",false],[" #C8CCDC","Planejado",true],["#E8A040","Tendência",true]].map(([c,l,dashed])=>
+        ce("div",{key:l,style:{display:"flex",alignItems:"center",gap:7,fontSize:11,color:"#7A8094"}},
+          ce("svg",{width:28,height:12,viewBox:"0 0 28 12"},
+            ce("line",{x1:0,y1:6,x2:28,y2:6,stroke:c.trim(),strokeWidth:dashed?1.5:2.5,strokeDasharray:dashed?"7,4":"none",strokeLinecap:"round"}),
+            !dashed&&ce("circle",{cx:14,cy:6,r:3,fill:c,stroke:"#fff",strokeWidth:1.5})
           ),
           l
         )
@@ -246,22 +262,28 @@ function computeChart(updates,schedules,gid,filterFloor){
   });
   if(!hasSchedule){earliestStart=TODAY;latestEnd=fmt(addD(new Date(),90));}
 
-  // Current actual % and rate from TODAY
+  // Current actual — only count floors that have started AND have at least 1 update
   const todayAcc={};
   grpUpd.filter(u=>u.date<=TODAY).forEach(u=>{
     const k=`${u.floor}_${u.room}_${u.environment||"A"}`;
     todayAcc[k]=(todayAcc[k]||0)+(u.actualPct||0);
   });
+  // Use only floors with actual updates for rate calculation
+  const activeFloorSet=new Set(grpUpd.map(u=>u.floor));
+  let totalUnitsActive=0;
+  activeFloorSet.forEach(fl=>{const sc=sched[fl];totalUnitsActive+=sc?.roomCount||12;});
+  const todayVals=Object.values(todayAcc).map(v=>Math.min(100,v));
+  const sumActual=todayVals.reduce((a,b)=>a+b,0);
+  const currentActual=totalUnitsActive>0?sumActual/totalUnitsActive:(todayVals.length?sumActual/todayVals.length:0);
+
+  // Overall project rate based on total units across all started floors
   let totalUnitsNow=0;
   floors.forEach(fl=>{const sc=sched[fl];if(sc?.startDate&&TODAY>=sc.startDate)totalUnitsNow+=sc.roomCount||12;});
-  const todayVals=Object.values(todayAcc).map(v=>Math.min(100,v));
-  const currentActual=totalUnitsNow>0
-    ?todayVals.reduce((a,b)=>a+b,0)/totalUnitsNow
-    :(todayVals.length?todayVals.reduce((a,b)=>a+b,0)/todayVals.length:0);
+  const currentActualOverall=totalUnitsNow>0?sumActual/totalUnitsNow:currentActual;
 
-  // Daily rate = current actual / days since earliest schedule start
-  const daysElapsed=Math.max(1,diffD(earliestStart,TODAY));
-  const ratePerDay=currentActual/daysElapsed; // % per day
+  // Daily rate based on days with actual work
+  const workDays=Math.max(1,[...new Set(grpUpd.map(u=>u.date))].length);
+  const ratePerDay=currentActualOverall/Math.max(workDays,diffD(earliestStart,TODAY)/2);
 
   // Project trend end date: when does trend reach 100%?
   let projectedEndDate=latestEnd;
